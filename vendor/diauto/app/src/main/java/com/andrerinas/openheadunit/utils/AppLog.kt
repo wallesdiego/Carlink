@@ -22,7 +22,11 @@ object AppLog {
 
         class Android : Logger {
             override fun println(priority: Int, tag: String, msg: String) {
-                Log.println(priority, TAG, msg)
+                try {
+                    Log.println(priority, TAG, msg)
+                } catch (_: RuntimeException) {
+                    // Running in a pure JVM unit test environment where android.util.Log is not mocked
+                }
             }
         }
 
@@ -101,6 +105,9 @@ object AppLog {
                 }
                 try { writer.flush() } catch (_: IOException) {}
                 try { writer.close() } catch (_: IOException) {}
+                if (file.exists() && file.length() == 0L) {
+                    file.delete()
+                }
             }
 
             /**
@@ -133,7 +140,6 @@ object AppLog {
     @Volatile private var currentLogSource: Settings.LogSource = Settings.LogSource.LOGCAT
 
     fun init(settings: Settings?, context: Context? = null) {
-        context?.let { DiagnosticJournal.init(it.applicationContext) }
         // Cache the level rather than resolving it per call: every call site below, and every
         // LOG_VERBOSE/LOG_DEBUG guard, used to reach SharedPreferences.getInt() through
         // Settings.exporterLogLevel — a lock plus a map lookup for lines that are mostly discarded.
@@ -198,78 +204,85 @@ object AppLog {
     val LOG_VERBOSE get() = LOG_LEVEL <= Log.VERBOSE
     val LOG_DEBUG get() = LOG_LEVEL <= Log.DEBUG
 
+    @JvmStatic
     fun i(msg: String) {
         if (isLoggable(Log.INFO)) log(Log.INFO, format(msg))
     }
 
+    @JvmStatic
     fun i(msg: String, vararg params: Any) {
         if (isLoggable(Log.INFO)) log(Log.INFO, format(msg, *params))
     }
 
+    @JvmStatic
     fun e(msg: String?) {
         if (isLoggable(Log.ERROR)) loge(format(msg ?: "Unknown error"), null)
     }
 
+    @JvmStatic
     fun e(msg: String, tr: Throwable) {
         if (isLoggable(Log.ERROR)) loge(format(msg), tr)
     }
 
+    @JvmStatic
     fun e(tr: Throwable) {
         if (isLoggable(Log.ERROR)) loge(tr.message ?: "Unknown error", tr)
     }
 
-
+    @JvmStatic
     fun e(msg: String?, vararg params: Any) {
         if (isLoggable(Log.ERROR)) loge(format(msg ?: "Unknown error", *params), null)
     }
 
+    @JvmStatic
     fun v(msg: String, vararg params: Any) {
         if (isLoggable(Log.VERBOSE)) log(Log.VERBOSE, format(msg, *params))
     }
 
+    @JvmStatic
     fun d(msg: String, vararg params: Any) {
         if (isLoggable(Log.DEBUG)) log(Log.DEBUG, format(msg, *params))
     }
 
+    @JvmStatic
     fun d(msg: String) {
         if (isLoggable(Log.DEBUG)) log(Log.DEBUG, format(msg))
     }
 
+    @JvmStatic
     fun w(msg: String) {
         if (isLoggable(Log.WARN)) log(Log.WARN, format(msg))
     }
 
+    @JvmStatic
     fun w(msg: String, vararg params: Any) {
         if (isLoggable(Log.WARN)) log(Log.WARN, format(msg, *params))
     }
 
+    /** Preserve the producer's origin when a worker emits a previously collected event. */
+    internal fun tagged(priority: Int, origin: String, message: String) {
+        if (isLoggable(priority)) {
+            log(priority, "[${Thread.currentThread().id}] $origin | $message")
+        }
+    }
+
     private fun log(priority: Int, msg: String) {
-        DiagnosticJournal.record(priority, msg)
         LOGGER.println(priority, TAG, msg)
     }
 
     private fun isLoggable(priority: Int): Boolean = priority >= LOG_LEVEL
 
-    private fun loge(message: String, tr: Throwable?) {
-        val trace = if (LOGGER is Logger.Android) Log.getStackTraceString(tr) else ""
-        // The journal is what a diagnostic report exports, and the logcat stack trace never reaches
-        // it. Without the exception's type and message a reported "crashed" line cannot be read for
-        // its cause, so carry a short, bounded summary into the journal as well.
-        DiagnosticJournal.record(Log.ERROR, if (tr == null) message else message + '\n' + throwableSummary(tr))
-        LOGGER.println(Log.ERROR, TAG, message + '\n' + trace)
-    }
-
     /**
-     * One line per exception in the cause chain (type and message), followed by the first frames
-     * of the innermost cause. Bounded so a deep chain cannot flood the journal.
+     * The trace is not conditional on the destination.
+     *
+     * It used to be attached only when the logger was [Logger.Android], so a capture written to a
+     * file — the one that outlives the fault and actually gets read afterwards — recorded the
+     * message and dropped the exception. "Wireless server error" with no cause is not a diagnosis,
+     * and the throwable is the whole reason these call sites pass one.
      */
-    internal fun throwableSummary(tr: Throwable): String {
-        val chain = generateSequence(tr) { it.cause.takeIf { cause -> cause !== it } }.take(4).toList()
-        val lines = chain.mapIndexed { index, t ->
-            (if (index == 0) "  exception: " else "  caused by: ") + "${t.javaClass.name}: ${t.message}"
-        }
-        val frames = chain.last().stackTrace.take(6).map { "    at $it" }
-        return (lines + frames).joinToString("\n")
+    private fun loge(message: String, tr: Throwable?) {
+        val trace = if (tr != null) Log.getStackTraceString(tr) else ""
+        LOGGER.println(Log.ERROR, TAG, if (trace.isEmpty()) message else "$message\n$trace")
     }
 
     private fun closeAppLogFileLogger() {
@@ -288,9 +301,6 @@ object AppLog {
             e("IllegalFormatException: formatString='%s' numArgs=%d", msg, array.size)
             formatted = "$msg (An error occurred while formatting the message.)"
         }
-        // Caller stack walking allocates on every audio/video log. Reserve it for
-        // explicit verbose diagnostics; normal operation retains the thread and message.
-        if (LOG_LEVEL > Log.DEBUG) return "[${Thread.currentThread().id}] $formatted"
         // Throwable's constructor already fills in the stack trace; calling fillInStackTrace()
         // again captured the whole thing a second time, per emitted line.
         val stackTrace = Throwable().stackTrace

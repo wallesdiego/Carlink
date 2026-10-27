@@ -1,4 +1,4 @@
-// CarLink: DiAuto's former :app module, built as the Android Auto engine library.
+// CarLink: open-headunit 3.5.0 (formerly DiAuto's :app module), built as the Android Auto engine library.
 // The APK, its applicationId, signing and shrinking now live in CarLink's :app module.
 // Kotlin is compiled by AGP's built-in Kotlin support (no kotlin-android/kapt plugins);
 // the Glide and lifecycle annotation processors were unused (no @GlideModule/@OnLifecycleEvent).
@@ -76,8 +76,10 @@ android {
 
         // Library BuildConfig has no application/version fields; the engine reads these.
         buildConfigField("String", "APPLICATION_ID", "\"$carlinkApplicationId\"")
-        buildConfigField("String", "VERSION_NAME", "\"0.3.12\"")
-        buildConfigField("int", "VERSION_CODE", "112")
+        buildConfigField("String", "VERSION_NAME", "\"3.5.0\"")
+        buildConfigField("int", "VERSION_CODE", "119")
+        // CarLink: open-headunit 3.5.0 reads the commit it was built from; CarLink builds have none.
+        buildConfigField("String", "GIT_SHA", "\"carlink\"")
 
         // Store available locales in BuildConfig for runtime access
         // This is scanned at build time from values-XX directories
@@ -132,7 +134,7 @@ dependencies {
     // Conscrypt 2.6.1 is 16 KB page aligned; CarLink's minSdk 25 no longer needs 2.5.3.
     implementation("org.conscrypt:conscrypt-android:2.6.1")
 
-    implementation("com.google.protobuf:protobuf-java:3.25.1")
+    implementation("com.google.protobuf:protobuf-java:3.25.5")
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("androidx.media:media:1.6.0")
@@ -150,6 +152,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
+    testImplementation("org.mockito:mockito-core:5.14.2")
 
     api(project(":androidauto-contract"))
 
@@ -171,6 +175,11 @@ dependencies {
 
     // Shizuku for root / shell access
     implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
+}
+
+// CarLink: upstream's Mockito inline mocks run on the build's JDK 25 test toolchain, which
+// ByteBuddy only supports with its experimental flag.
+tasks.withType<Test>().configureEach {
+    jvmArgs("-Dnet.bytebuddy.experimental=true")
 }

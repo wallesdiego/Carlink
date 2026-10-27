@@ -8,7 +8,7 @@ import com.andrerinas.openheadunit.main.MainActivity
 /**
  * CarLink: lets an APK that embeds this engine choose the screens the engine opens on its own
  * (notification tap, boot launch, return after a Wi-Fi Direct prompt), the name its notifications
- * and media session carry, and what happens to its toasts. Standalone DiAuto keeps its defaults.
+ * and media session carry, and what happens to its toasts. Standalone open-headunit keeps its defaults.
  */
 object HostIntegration {
     @Volatile
@@ -143,15 +143,6 @@ object HostIntegration {
     /** CarLink: fires [onEngineEvent]; a failing host hook never reaches the engine. */
     @JvmStatic
     fun engineEvent(context: Context?, kind: EngineEvent, detail: String? = null) {
-        when (kind) { // CarLink: wireless timing (aap/WirelessTiming), whether or not a host listens
-            EngineEvent.BT_CHANNEL_ACCEPTED -> com.andrerinas.openheadunit.aap.WirelessTiming.mark(
-                com.andrerinas.openheadunit.aap.WirelessTimeline.Phase.PHONE_RFCOMM)
-            EngineEvent.CREDENTIALS_SENT -> com.andrerinas.openheadunit.aap.WirelessTiming.mark(
-                com.andrerinas.openheadunit.aap.WirelessTimeline.Phase.WIFI_INFO_RESPONSE)
-            EngineEvent.FIRST_VIDEO_FRAME -> com.andrerinas.openheadunit.aap.WirelessTiming.mark(
-                com.andrerinas.openheadunit.aap.WirelessTimeline.Phase.FIRST_FRAME)
-            else -> Unit
-        }
         val hook = onEngineEvent ?: return
         try {
             hook(context, kind, detail)

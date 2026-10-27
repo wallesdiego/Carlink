@@ -4,17 +4,23 @@
 
     <uses-sdk tools:overrideLibrary="
         com.google.android.gms.nearby, com.google.android.gms.base, com.google.android.gms.tasks, com.google.android.gms.common,
-        rikka.shizuku.provider, rikka.shizuku.api, rikka.shizuku.shared, rikka.shizuku.aidl, com.topjohnwu.superuser" />
+        rikka.shizuku.api, rikka.shizuku.shared, rikka.shizuku.aidl, com.topjohnwu.superuser" />
 
     <queries>
         <intent>
-            <action android:name="android.settings.WIFI_SETTINGS" />
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-        <package android:name="com.byd.clusterdebug" />
-        <package android:name="com.byd.amapservice" />
-        <package android:name="com.example.amapservice" />
-        <package android:name="com.ts.car.someip.service" />
         <package android:name="com.google.android.projection.gearhead" />
+        <!-- OEM AA/CarPlay apps that conflict with Open Headunit -->
+        <package android:name="com.zjinnova.zlink" />
+        <package android:name="com.syu.carlink" />
+        <package android:name="com.zjinnova.zlink5" />
+        <package android:name="cn.manstep.phonemirrorBox" />
+        <package android:name="cn.manstep.phonemirrorBox.nomap" />
+        <package android:name="com.autokit" />
+        <package android:name="com.suding.speedplay" />
+        <package android:name="com.tlink.carplay" />
     </queries>
 
     <uses-feature
@@ -55,8 +61,6 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Optional, granted by the owner: follow the stock cluster screens (dashboard side map). -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -78,9 +82,24 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- CarLink: AapService's microphone type (Assistant and calls behind another app) -->
+    <!-- Declared so the microphone type can be claimed; it is only ever requested when
+         RECORD_AUDIO is actually granted, because claiming it without throws on Android 14+. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!--
+        Only requested up to API 32. From API 33 (Android 13) a granted READ_LOGS makes the app a
+        privileged logd reader, which routes every `logcat` spawn through LogcatManagerService: the
+        system log-access consent dialog when the app is foreground, a silent downgrade to own-UID
+        logs when it is a background service. Nothing (pm grant, a property, a setting) suppresses
+        that. Without the permission the app is an ordinary reader and logd serves its own UID's
+        lines - Java and native - immediately and with no dialog, which is what LogExporter needs.
+        Pre-13 there is no LogcatManagerService, so there the permission still buys system-wide
+        logs for free.
+    -->
+    <uses-permission
+        android:name="android.permission.READ_LOGS"
+        android:maxSdkVersion="32"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".App"
@@ -89,12 +108,11 @@
         android:label="@string/title"
         android:largeHeap="true"
         android:supportsRtl="true"
-        android:localeConfig="@xml/locales_config"
         tools:ignore="GoogleAppIndexingWarning">
 
         <activity
             android:name=".aap.AapProjectionActivity"
-            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:hardwareAccelerated="true"
             android:launchMode="singleTask"
@@ -104,11 +122,20 @@
 
         </activity>
 
+        <!--
+            excludeFromRecents/noHistory/taskAffinity: this is a translucent trampoline the system
+            launches on every USB attach once it is the default handler. Without them it lands in
+            the app's own task and lingers there, so a later attach can be delivered to a stale
+            instance instead of starting a fresh one.
+        -->
         <activity
             android:name=".app.UsbAttachedActivity"
             android:directBootAware="true"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTop"
+            android:noHistory="true"
+            android:taskAffinity=""
             android:theme="@style/AppTheme.Translucent">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
@@ -122,6 +149,7 @@
         <activity
             android:name=".main.MainActivity"
             android:configChanges="keyboardHidden|uiMode"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustPan"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/SplashTheme">
@@ -196,6 +224,18 @@
             </intent-filter>
         </activity>
 
+        <activity-alias
+            android:name=".CarLauncherAlias"
+            android:targetActivity=".main.MainActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <activity
             android:name=".main.SettingsActivity"
             android:label="@string/settings"
@@ -208,7 +248,6 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/AppTheme" />
 
-        <!-- CarLink: + microphone (AapService.startForegroundWithTypes) -->
         <service
             android:name=".aap.AapService"
             android:exported="false"
@@ -220,6 +259,9 @@
             </intent-filter>
         </service>
         <service android:name=".location.GpsLocationService" />
+        <service
+            android:name=".main.FloatingButtonService"
+            android:exported="false" />
 
         <!-- AndroidX MediaButtonReceiver: Routes MEDIA_BUTTON intents to AapService
              on Android 8+ where implicit broadcasts to manifest-registered receivers
@@ -234,6 +276,47 @@
 
         <!-- Handles proprietary headunit command intents (com.android.music.*,
              com.syu.*, etc). MEDIA_BUTTON is handled by MediaButtonReceiver above. -->
+        <!-- The command surface for automation tools and shell scripts. A receiver rather than
+             an activity because Tasker and MacroDroid can send to one without holding "Display
+             over other apps", which an activity target needs on Android 10+. The configuring
+             actions are refused unless the user turns on "Allow external configuration". -->
+        <receiver
+            android:name=".automation.AutomationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.andrerinas.openheadunit.ACTION_CONNECT" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_DISCONNECT" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_START_SELF_MODE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_STOP_SERVICE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_EXIT" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_SET_NIGHT_MODE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_START_WIRELESS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_STOP_WIRELESS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_CANCEL_WIRELESS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_END_SESSION_STAY_ARMED" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_START_WIRELESS_SCAN" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_NATIVE_AA_POKE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_NATIVE_AA_CANCEL_POKE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_NEARBY_CONNECT" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_CHECK_USB" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_REFRESH_SENSORS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_RESTART_AUDIO" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_RAISE_PROJECTION" />
+                <action android:name="com.andrerinas.openheadunit.aap.action.REFRESH_SENSORS" />
+                <action android:name="com.andrerinas.openheadunit.aap.action.RESTART_AUDIO" />
+                <action android:name="com.andrerinas.openheadunit.aap.action.RAISE_PROJECTION" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_QUERY_STATE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_SET_SETTINGS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_GET_SETTINGS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_RESET_SETTINGS" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_SET_LOG_LEVEL" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_START_LOG_CAPTURE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_STOP_LOG_CAPTURE" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_EXPORT_LOG" />
+                <action android:name="com.andrerinas.openheadunit.ACTION_LOG_MARKER" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".app.RemoteControlReceiver"
             android:exported="true">
@@ -250,7 +333,7 @@
         <!-- Comprehensive receiver for steering wheel and hardware buttons,
              covering both standard Android events and proprietary Chinese headunit broadcasts. -->
         <receiver
-            android:name=".connection.CarKeyReceiver"
+            android:name=".connection.carkey.CarKeyBroadcastReceiver"
             android:exported="true">
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
@@ -295,6 +378,10 @@
                 <!-- Microntek / MTCD / PX3 head units (ACC wake) -->
                 <action android:name="com.cayboy.action.ACC_ON" />
                 <action android:name="com.carboy.action.ACC_ON" />
+                <!-- XYAuto head units (ACC wake) -->
+                <action android:name="xy.android.acc.on" />
+                <!-- Autochips / MediaTek QuickBoot units (ACC wake) -->
+                <action android:name="autochips.intent.action.QB_POWERON" />
             </intent-filter>
         </receiver>
 
@@ -353,6 +440,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".connection.self.PermissionTrampolineActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -362,13 +454,5 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
-
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="true"
-            android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

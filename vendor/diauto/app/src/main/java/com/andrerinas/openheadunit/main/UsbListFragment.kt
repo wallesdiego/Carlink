@@ -19,6 +19,7 @@ import androidx.core.text.HtmlCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -26,11 +27,17 @@ import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.R
 import com.andrerinas.openheadunit.aap.AapProjectionActivity
 import com.andrerinas.openheadunit.aap.AapService
-import com.andrerinas.openheadunit.connection.UsbAccessoryMode
-import com.andrerinas.openheadunit.connection.UsbDeviceCompat
-import com.andrerinas.openheadunit.connection.UsbReceiver
+import com.andrerinas.openheadunit.connection.usb.UsbAccessoryMode
+import com.andrerinas.openheadunit.connection.usb.UsbDeviceCompat
+import com.andrerinas.openheadunit.connection.usb.UsbDeviceDiagnostics
+import com.andrerinas.openheadunit.connection.usb.UsbReceiver
 import com.andrerinas.openheadunit.utils.Settings
+import com.andrerinas.openheadunit.utils.ToastUtils
 import com.google.android.material.appbar.MaterialToolbar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class UsbListFragment : Fragment() {
     private lateinit var adapter: DeviceAdapter
@@ -48,10 +55,10 @@ class UsbListFragment : Fragment() {
         toolbar = view.findViewById(R.id.toolbar)
 
         settings = Settings(requireContext())
-        adapter = DeviceAdapter(requireContext(), settings)
+        adapter = DeviceAdapter(requireContext(), settings, lifecycleScope)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
-        
+
         // Add padding
         val padding = resources.getDimensionPixelSize(R.dimen.list_padding)
         recyclerView.setPadding(padding, padding, padding, padding)
@@ -73,6 +80,12 @@ class UsbListFragment : Fragment() {
             adapter.setData(it, allowDevices)
 
             if (it.isEmpty()) {
+                // A unit whose ROM never declared USB host enumerates nothing whatever is plugged
+                // in, so "no device connected" reads as the user's fault when it is not.
+                noUsbDeviceTextView.setText(
+                    if (UsbDeviceDiagnostics.hasUsbHostFeature(requireContext())) R.string.no_usb_device_connected
+                    else R.string.no_usb_host_support
+                )
                 noUsbDeviceTextView.visibility = VISIBLE
                 recyclerView.visibility = GONE
             } else {
@@ -92,7 +105,11 @@ class UsbListFragment : Fragment() {
         val startButton = itemView.findViewById<Button>(android.R.id.button2)
     }
 
-    private class DeviceAdapter(private val mContext: Context, private val mSettings: Settings) : RecyclerView.Adapter<DeviceViewHolder>(), View.OnClickListener {
+    private class DeviceAdapter(
+        private val mContext: Context,
+        private val mSettings: Settings,
+        private val scope: CoroutineScope,
+    ) : RecyclerView.Adapter<DeviceViewHolder>(), View.OnClickListener {
         private var allowedDevices: MutableSet<String> = mutableSetOf()
         private var deviceList: List<UsbDeviceCompat> = listOf()
         private var lastClickTime: Long = 0
@@ -104,7 +121,7 @@ class UsbListFragment : Fragment() {
 
         override fun onBindViewHolder(holder: DeviceViewHolder, position: Int) {
             val device = deviceList[position]
-            
+
             // Background styling logic
             val isTop = position == 0
             val isBottom = position == itemCount - 1
@@ -116,7 +133,8 @@ class UsbListFragment : Fragment() {
             }
             holder.itemView.setBackgroundResource(bgRes)
 
-            val title = TextUtils.htmlEncode(device.uniqueName)
+            val vidPidText = " (${mSettings.formatUsbVidPidDisplay(device.vendorId, device.productId)})"
+            val title = TextUtils.htmlEncode("${device.uniqueName}$vidPidText")
             val path = TextUtils.htmlEncode(device.deviceName)
             holder.startButton.text = HtmlCompat.fromHtml(
                 "<b>$title</b><br/>$path",
@@ -125,10 +143,18 @@ class UsbListFragment : Fragment() {
             holder.startButton.tag = position
             holder.startButton.setOnClickListener(this)
 
+            val isBlacklisted = mSettings.isUsbDeviceBlacklisted(device.wrappedDevice)
+
             if (device.isInAccessoryMode) {
                 holder.allowButton.setText(R.string.allowed)
                 holder.allowButton.setTextColor(ContextCompat.getColor(mContext, R.color.material_green_700))
                 holder.allowButton.isEnabled = false
+            } else if (isBlacklisted) {
+                holder.allowButton.setText(R.string.blacklisted)
+                holder.allowButton.setTextColor(ContextCompat.getColor(mContext, R.color.material_red_700))
+                holder.allowButton.tag = position
+                holder.allowButton.isEnabled = true
+                holder.allowButton.setOnClickListener(this)
             } else {
                 if (allowedDevices.contains(device.uniqueName)) {
                     holder.allowButton.setText(R.string.allowed)
@@ -160,14 +186,34 @@ class UsbListFragment : Fragment() {
             }
             val device = deviceList[position]
             if (v.id == android.R.id.button1) {
-                if (allowedDevices.contains(device.uniqueName)) {
-                    allowedDevices.remove(device.uniqueName)
-                } else {
-                    allowedDevices.add(device.uniqueName)
+                val isBlacklisted = mSettings.isUsbDeviceBlacklisted(device.wrappedDevice)
+                val isAllowed = allowedDevices.contains(device.uniqueName)
+
+                when {
+                    isBlacklisted -> {
+                        // Blacklisted -> Ignored
+                        mSettings.removeUsbDeviceFromBlacklist(device.wrappedDevice)
+                    }
+                    isAllowed -> {
+                        // Allowed -> Blacklisted
+                        allowedDevices.remove(device.uniqueName)
+                        mSettings.allowedDevices = allowedDevices
+                        mSettings.addUsbDeviceToBlacklist(device.wrappedDevice)
+                    }
+                    else -> {
+                        // Ignored -> Allowed
+                        allowedDevices.add(device.uniqueName)
+                        mSettings.allowedDevices = allowedDevices
+                    }
                 }
-                mSettings.allowedDevices = allowedDevices
                 notifyDataSetChanged()
             } else {
+                if (mSettings.isUsbDeviceBlacklisted(device.wrappedDevice)) {
+                    // The row already says "Blacklisted" and the button used to connect anyway.
+                    ToastUtils.showToast(mContext, R.string.blacklisted, Toast.LENGTH_SHORT, force = true)
+                    return
+                }
+                AapService.instance?.liftUsbCancel("a USB device was chosen from the list")
                 if (App.provide(mContext).commManager.isConnected) {
 
                     // Already connected -> bring existing projection to front
@@ -179,31 +225,40 @@ class UsbListFragment : Fragment() {
                 } else if (device.isInAccessoryMode) {
                     // Device is in Accessory Mode but we are NOT connected.
                     // Start connection immediately.
-                    Toast.makeText(mContext, R.string.android_auto_starting, Toast.LENGTH_SHORT).show()
+                    ToastUtils.showToast(mContext, R.string.android_auto_starting, Toast.LENGTH_SHORT)
                     (mContext as? MainActivity)?.beginAutoConnect(
                         "manual USB list (accessory mode)",
                         MainActivity.ConnectionUiMode.OVERLAY
                     )
                     ContextCompat.startForegroundService(mContext, Intent(mContext, AapService::class.java).apply {
                         action = AapService.ACTION_CHECK_USB
+                        putExtra(AapService.EXTRA_USER_REQUESTED, true)
                     })
                 } else {
                     // Standard connection flow
-                    val usbManager = mContext.getSystemService(Context.USB_SERVICE) as UsbManager
+                    val usbManager = UsbDeviceCompat.usbManager(mContext) ?: return
                     if (usbManager.hasPermission(device.wrappedDevice)) {
                         val usbMode = UsbAccessoryMode(usbManager)
-                        if (usbMode.connectAndSwitch(device.wrappedDevice, mSettings.useLibusb)) {
-                            Toast.makeText(mContext, R.string.switching_to_android_auto, Toast.LENGTH_SHORT).show()
-                            (mContext as? MainActivity)?.beginAutoConnect(
-                                "manual USB list (AOA switch)",
-                                MainActivity.ConnectionUiMode.OVERLAY
-                            )
-                        } else {
-                            Toast.makeText(mContext, R.string.switch_failed, Toast.LENGTH_SHORT).show()
+                        val useLibusb = mSettings.useLibusb
+                        // Eight control transfers at a 1 s timeout each. On the main thread that is
+                        // an ANR against any device that stops answering rather than refusing.
+                        scope.launch(Dispatchers.IO) {
+                            val switched = usbMode.connectAndSwitch(device.wrappedDevice, useLibusb)
+                            withContext(Dispatchers.Main) {
+                                if (switched) {
+                                    ToastUtils.showToast(mContext, R.string.switching_to_android_auto, Toast.LENGTH_SHORT)
+                                    (mContext as? MainActivity)?.beginAutoConnect(
+                                        "manual USB list (AOA switch)",
+                                        MainActivity.ConnectionUiMode.OVERLAY
+                                    )
+                                } else {
+                                    ToastUtils.showToast(mContext, R.string.switch_failed, Toast.LENGTH_SHORT, force = true)
+                                }
+                                notifyDataSetChanged()
+                            }
                         }
-                        notifyDataSetChanged()
                     } else {
-                        Toast.makeText(mContext, R.string.requesting_usb_permission, Toast.LENGTH_SHORT).show()
+                        ToastUtils.showToast(mContext, R.string.requesting_usb_permission, Toast.LENGTH_SHORT)
                         ContextCompat.startForegroundService(mContext, Intent(mContext, AapService::class.java))
                         usbManager.requestPermission(
                             device.wrappedDevice,

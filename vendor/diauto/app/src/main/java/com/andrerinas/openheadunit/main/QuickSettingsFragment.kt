@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -18,8 +19,10 @@ import com.andrerinas.openheadunit.utils.Settings
 import com.andrerinas.openheadunit.utils.AppLog
 import android.widget.Toast
 import com.andrerinas.openheadunit.utils.LogExporter
+import com.andrerinas.openheadunit.utils.ToastUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.appbar.MaterialToolbar
+import kotlinx.coroutines.launch
 
 class QuickSettingsFragment : DialogFragment() {
 
@@ -35,14 +38,13 @@ class QuickSettingsFragment : DialogFragment() {
     private lateinit var settingsRecyclerView: RecyclerView
     private lateinit var settingsAdapter: SettingsAdapter
     private lateinit var toolbar: MaterialToolbar
-    
+
     private var originalViewMode: Settings.ViewMode? = null
-    private var originalStretch: Boolean? = null
     private var originalScale: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setStyle(STYLE_NORMAL, R.style.DiAutoQuickSettings)
+        setStyle(STYLE_NORMAL, R.style.AppTheme_Fullscreen)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -51,10 +53,9 @@ class QuickSettingsFragment : DialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
+
         settings = App.provide(requireContext()).settings
         originalViewMode = settings.viewMode
-        originalStretch = settings.stretchToFill
         originalScale = settings.forcedScale
 
         toolbar = view.findViewById<MaterialToolbar>(R.id.toolbar)
@@ -89,11 +90,25 @@ class QuickSettingsFragment : DialogFragment() {
 
         // --- Audio Section ---
         items.add(SettingItem.CategoryHeader("audio", R.string.category_audio))
-        
+
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            items.add(SettingItem.ToggleSettingEntry(
+                stableId = "useAAudioOutput",
+                nameResId = R.string.aaudio_output,
+                descriptionResId = R.string.aaudio_output_description,
+                isChecked = settings.useAAudioOutput,
+                onCheckedChanged = { enabled ->
+                    settings.useAAudioOutput = enabled
+                    settings.commit()
+                    notifyChange(needsAudioRestart = true)
+                }
+            ))
+        }
+
         items.add(SettingItem.SettingEntry(
             stableId = "audioVolumeOffsets",
             nameResId = R.string.audio_volume_offset,
-            value = "${(100 + settings.mediaVolumeOffset)}% / ${(100 + settings.assistantVolumeOffset)}% / ${(100 + settings.navigationVolumeOffset)}%",
+            value = "${(100 + settings.mediaVolumeOffset)}% / ${(100 + settings.guidanceVolumeOffset)}% / ${(100 + settings.systemVolumeOffset)}%",
             onClick = { showAudioOffsetsDialog() }
         ))
 
@@ -113,7 +128,7 @@ class QuickSettingsFragment : DialogFragment() {
 
         // --- Display Section ---
         items.add(SettingItem.CategoryHeader("graphic", R.string.category_graphic))
-        
+
         val nightModeTitles = resources.getStringArray(R.array.night_mode)
         items.add(SettingItem.SettingEntry(
             stableId = "nightMode",
@@ -138,17 +153,11 @@ class QuickSettingsFragment : DialogFragment() {
             onClick = { showFullscreenDialog() }
         ))
 
-        items.add(SettingItem.ToggleSettingEntry(
-            stableId = "stretchToFill",
-            nameResId = R.string.pref_stretch_screen_title,
-            descriptionResId = R.string.pref_stretch_screen_summary,
-            isChecked = settings.stretchToFill,
-            onCheckedChanged = { isChecked ->
-                settings.stretchToFill = isChecked
-                settings.commit()
-                notifyChange(needsViewRecreate = true)
-                updateSettingsList()
-            }
+        items.add(SettingItem.SettingEntry(
+            stableId = "videoFitMode",
+            nameResId = R.string.video_fit_mode,
+            value = resources.getStringArray(R.array.video_fit_mode)[settings.videoFitMode.value],
+            onClick = { showVideoFitModeDialog() }
         ))
 
         items.add(SettingItem.ToggleSettingEntry(
@@ -174,12 +183,12 @@ class QuickSettingsFragment : DialogFragment() {
         ))
 
         items.add(SettingItem.ToggleSettingEntry(
-            stableId = "showFpsCounter",
-            nameResId = R.string.show_fps_counter,
-            descriptionResId = R.string.show_fps_counter_description,
-            isChecked = settings.showFpsCounter,
+            stableId = "showPerformanceOverlay",
+            nameResId = R.string.show_performance_overlay,
+            descriptionResId = R.string.show_performance_overlay_description,
+            isChecked = settings.showPerformanceOverlay,
             onCheckedChanged = { isChecked ->
-                settings.showFpsCounter = isChecked
+                settings.showPerformanceOverlay = isChecked
                 settings.commit()
                 notifyChange()
                 updateSettingsList()
@@ -202,17 +211,19 @@ class QuickSettingsFragment : DialogFragment() {
             }
         ))
 
-        items.add(SettingItem.ToggleSettingEntry(
-            stableId = "killOnDisconnect",
-            nameResId = R.string.kill_on_disconnect,
-            descriptionResId = R.string.kill_on_disconnect_description,
-            isChecked = settings.killOnDisconnect,
-            onCheckedChanged = { isChecked ->
-                settings.killOnDisconnect = isChecked
-                settings.commit()
-                updateSettingsList()
-            }
-        ))
+        if (!settings.isCarLauncherActive) {
+            items.add(SettingItem.ToggleSettingEntry(
+                stableId = "killOnDisconnect",
+                nameResId = R.string.kill_on_disconnect,
+                descriptionResId = R.string.kill_on_disconnect_description,
+                isChecked = settings.rawKillOnDisconnect,
+                onCheckedChanged = { isChecked ->
+                    settings.rawKillOnDisconnect = isChecked
+                    settings.commit()
+                    updateSettingsList()
+                }
+            ))
+        }
 
         items.add(SettingItem.SettingEntry(
             stableId = "exportLogs",
@@ -265,6 +276,20 @@ class QuickSettingsFragment : DialogFragment() {
             .show()
     }
 
+    private fun showVideoFitModeDialog() {
+        val options = resources.getStringArray(R.array.video_fit_mode)
+        MaterialAlertDialogBuilder(requireContext(), R.style.DarkAlertDialog)
+            .setTitle(R.string.change_video_fit_mode)
+            .setSingleChoiceItems(options, settings.videoFitMode.value) { dialog, which ->
+                settings.videoFitMode = Settings.VideoFitMode.fromInt(which) ?: Settings.VideoFitMode.FILL
+                settings.commit()
+                notifyChange(needsViewRecreate = true)
+                dialog.dismiss()
+                updateSettingsList()
+            }
+            .show()
+    }
+
     private fun showFullscreenDialog() {
         MaterialAlertDialogBuilder(requireContext(), R.style.DarkAlertDialog)
             .setTitle(R.string.start_in_fullscreen_mode)
@@ -281,23 +306,23 @@ class QuickSettingsFragment : DialogFragment() {
 
     private fun showAudioOffsetsDialog() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_audio_offsets, null)
-        
+
         val seekMedia = dialogView.findViewById<android.widget.SeekBar>(R.id.seek_media)
-        val seekAssistant = dialogView.findViewById<android.widget.SeekBar>(R.id.seek_assistant)
-        val seekNavigation = dialogView.findViewById<android.widget.SeekBar>(R.id.seek_navigation)
-        
+        val seekGuidance = dialogView.findViewById<android.widget.SeekBar>(R.id.seek_guidance)
+        val seekSystem = dialogView.findViewById<android.widget.SeekBar>(R.id.seek_system)
+
         val textMedia = dialogView.findViewById<android.widget.TextView>(R.id.text_media_val)
-        val textAssistant = dialogView.findViewById<android.widget.TextView>(R.id.text_assistant_val)
-        val textNavigation = dialogView.findViewById<android.widget.TextView>(R.id.text_navigation_val)
+        val textGuidance = dialogView.findViewById<android.widget.TextView>(R.id.text_guidance_val)
+        val textSystem = dialogView.findViewById<android.widget.TextView>(R.id.text_system_val)
 
         seekMedia.progress = (settings.mediaVolumeOffset / 2) + 50
-        seekAssistant.progress = (settings.assistantVolumeOffset / 2) + 50
-        seekNavigation.progress = (settings.navigationVolumeOffset / 2) + 50
+        seekGuidance.progress = (settings.guidanceVolumeOffset / 2) + 50
+        seekSystem.progress = (settings.systemVolumeOffset / 2) + 50
 
         val updateLabels = {
             textMedia.text = "${(seekMedia.progress * 2)}%"
-            textAssistant.text = "${(seekAssistant.progress * 2)}%"
-            textNavigation.text = "${(seekNavigation.progress * 2)}%"
+            textGuidance.text = "${(seekGuidance.progress * 2)}%"
+            textSystem.text = "${(seekSystem.progress * 2)}%"
         }
         updateLabels()
 
@@ -310,16 +335,16 @@ class QuickSettingsFragment : DialogFragment() {
         }
 
         seekMedia.setOnSeekBarChangeListener(listener)
-        seekAssistant.setOnSeekBarChangeListener(listener)
-        seekNavigation.setOnSeekBarChangeListener(listener)
+        seekGuidance.setOnSeekBarChangeListener(listener)
+        seekSystem.setOnSeekBarChangeListener(listener)
 
         MaterialAlertDialogBuilder(requireContext(), R.style.DarkAlertDialog)
             .setTitle(R.string.audio_volume_offset)
             .setView(dialogView)
             .setPositiveButton(android.R.string.ok) { dialog, _ ->
                 settings.mediaVolumeOffset = (seekMedia.progress - 50) * 2
-                settings.assistantVolumeOffset = (seekAssistant.progress - 50) * 2
-                settings.navigationVolumeOffset = (seekNavigation.progress - 50) * 2
+                settings.guidanceVolumeOffset = (seekGuidance.progress - 50) * 2
+                settings.systemVolumeOffset = (seekSystem.progress - 50) * 2
                 settings.commit()
                 notifyChange()
                 updateSettingsList()
@@ -330,8 +355,11 @@ class QuickSettingsFragment : DialogFragment() {
     }
 
     private fun showAudioLatencyDialog() {
-        val options = arrayOf("1x (Lowest Latency)", "2x (Low Latency)", "4x (High Latency)", "8x (Very High Latency)")
-        val values = intArrayOf(1, 2, 4, 8)
+        val options = arrayOf(
+            "1x (lowest latency)", "2x (low latency)", "4x (medium)",
+            "8x (deep)", "16x (deepest, default)"
+        )
+        val values = intArrayOf(1, 2, 4, 8, 16)
         val currentIndex = values.indexOf(settings.audioLatencyMultiplier).coerceAtLeast(0)
         MaterialAlertDialogBuilder(requireContext(), R.style.DarkAlertDialog)
             .setTitle(R.string.audio_latency_multiplier)
@@ -398,7 +426,7 @@ class QuickSettingsFragment : DialogFragment() {
         val context = requireContext()
         val exporterLevel = settings.exporterLogLevel
         if (exporterLevel == LogExporter.LogLevel.SILENT) {
-            Toast.makeText(context, getString(R.string.failed_export_in_silent_logs), Toast.LENGTH_LONG).show()
+            ToastUtils.showToast(context, getString(R.string.failed_export_in_silent_logs), Toast.LENGTH_LONG, force = true)
             return
         }
 
@@ -410,23 +438,40 @@ class QuickSettingsFragment : DialogFragment() {
         } else if (LogExporter.isCapturing) {
             LogExporter.stopCapture()
         }
-        
-        val logFile = LogExporter.saveLogToPublicFile(context, exporterLevel)
-        updateSettingsList()
 
-        if (logFile != null) {
-            MaterialAlertDialogBuilder(context, R.style.DarkAlertDialog)
-                .setTitle(R.string.logs_exported)
-                .setMessage(getString(R.string.log_saved_to, logFile.absolutePath))
-                .setPositiveButton(R.string.share) { _, _ ->
-                    LogExporter.shareLogFile(context, logFile)
-                }
-                .setNegativeButton(R.string.close) { dialog, _ ->
-                    dialog.dismiss()
-                }
-                .show()
-        } else {
-            Toast.makeText(context, getString(R.string.failed_export_logs), Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val logFile = LogExporter.saveLogToPublicFile(context, exporterLevel)
+            updateSettingsList()
+
+            if (logFile != null) {
+                MaterialAlertDialogBuilder(context, R.style.DarkAlertDialog)
+                    .setTitle(R.string.logs_exported)
+                    .setMessage(getString(R.string.log_saved_to, logFile.absolutePath))
+                    .setPositiveButton(R.string.share) { _, _ ->
+                        LogExporter.shareLogFile(context, logFile)
+                    }
+                    .setNeutralButton(R.string.copy_to_clipboard) { _, _ ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val copied = LogExporter.copyFileToClipboard(context, logFile)
+                            if (copied) {
+                                val msg = getString(R.string.logs_copied_to_clipboard, logFile.absolutePath)
+                                MaterialAlertDialogBuilder(requireContext(), R.style.DarkAlertDialog)
+                                    .setTitle(R.string.success)
+                                    .setMessage(msg)
+                                    .setPositiveButton(R.string.close, null)
+                                    .show()
+                            } else {
+                                ToastUtils.showToast(requireContext(), getString(R.string.logs_copy_to_clipboard_failed), Toast.LENGTH_LONG, force = true)
+                            }
+                        }
+                    }
+                    .setNegativeButton(R.string.close) { dialog, _ ->
+                        dialog.dismiss()
+                    }
+                    .show()
+            } else {
+                ToastUtils.showToast(context, getString(R.string.failed_export_logs), Toast.LENGTH_SHORT, force = true)
+            }
         }
     }
 }

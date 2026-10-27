@@ -15,7 +15,7 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="?attr/actionBarSize"
             app:title="@string/keymap"
             app:navigationIcon="@drawable/ic_arrow_back_white"
             app:titleTextColor="?android:attr/textColorPrimary"
@@ -36,10 +36,9 @@
         android:layout_height="wrap_content"
         android:padding="20dp"
         android:gravity="center"
-        android:text="@string/keymap_test_hint"
+        android:text="Press any key to test..."
         android:textSize="18sp"
         android:textStyle="bold"
-        android:textColor="?android:attr/textColorSecondary"
-        android:background="?attr/colorSurface" />
+        android:textColor="?android:attr/textColorSecondary" />
 
 </LinearLayout>

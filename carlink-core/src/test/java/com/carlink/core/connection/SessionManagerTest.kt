@@ -384,8 +384,8 @@ class SessionManagerTest {
     }
 
     @Test fun theModuleSettingPicksTheEngineRouteOnlyWhereAModuleWasFound() {
-        val zbt = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.Route.ZBT
-        val blink = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.Route.BLINK
+        val zbt = com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.ExternalBtTransportPolicy.Route.ZBT
+        val blink = com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.ExternalBtTransportPolicy.Route.BLINK
         for (stereo in com.carlink.core.detect.StereoBluetooth.entries) {
             assertEquals(stereo.name, null, DeviceEnvironment.moduleRoute(stereo, moduleOn = false))
             val expected = when (stereo) {
@@ -615,7 +615,7 @@ class SessionManagerTest {
         assertTrue(failed.detail!!.startsWith("unplug the phone and plug it in again"))
     }
 
-    @Test fun aSilentWirelessPhoneIsWokenTwiceThenReportedWithAReason() {
+    @Test fun aSilentWirelessPhoneIsWokenFourTimesThenReportedWithAReason() {
         val m = manager()
         m.connect("AA:BB", PhoneKind.ANDROID, "Pixel"); idle()
         androidAuto.emit(AdapterEvent.Progress(1, 4, ProgressStage.WAITING_FOR_PHONE)); idle()
@@ -624,10 +624,14 @@ class SessionManagerTest {
         assertEquals(DETAIL_PHONE_NOT_ANSWERING, link(m).detail)
         advance(10_000)
         assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE), androidAuto.recovered)
+        // Wireless Android Auto gets four nudges (StallPlaybook: the head unit's Bluetooth cycle).
+        advance(10_000)
+        advance(10_000)
+        assertEquals(List(4) { RecoveryAction.NUDGE }, androidAuto.recovered)
         advance(10_000)
         val failed = m.state.value as SessionState.Failed
         assertEquals(FailureReason.PHONE_DID_NOT_ANSWER, failed.reason)
-        assertTrue(failed.detail!!.contains("did not answer in 30 s"))
+        assertTrue(failed.detail!!.contains("did not answer in 50 s"))
     }
 
     @Test fun deadlinesFollowThisPhonesOwnTimings() {

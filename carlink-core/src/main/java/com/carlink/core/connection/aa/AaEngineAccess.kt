@@ -15,9 +15,9 @@ import androidx.core.content.ContextCompat
 import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.HostIntegration
 import com.andrerinas.openheadunit.aap.AapService
-import com.andrerinas.openheadunit.connection.UsbAccessoryMode
-import com.andrerinas.openheadunit.connection.UsbNative
-import com.andrerinas.openheadunit.connection.UsbDeviceCompat
+import com.andrerinas.openheadunit.connection.usb.UsbAccessoryMode
+import com.andrerinas.openheadunit.connection.usb.UsbNative
+import com.andrerinas.openheadunit.connection.usb.UsbDeviceCompat
 import com.andrerinas.openheadunit.utils.Settings
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -98,6 +98,9 @@ internal class DiAutoEngineAccess(context: Context) : AaEngineAccess {
         val intent = Intent(app, AapService::class.java).apply {
             if (action != null) setAction(action)
             if (mac != null) putExtra(AapService.EXTRA_MAC, mac)
+            // Every CarLink start is the driver's request: open-headunit 3.5.0 then lifts its own
+            // background gates (status-pill cancel, screen-off hold, connection-type filter).
+            putExtra(AapService.EXTRA_USER_REQUESTED, true)
         }
         return runCatching { ContextCompat.startForegroundService(app, intent) }
             .onFailure { Log.w(TAG, "AapService $action refused: ${it.javaClass.simpleName}: ${it.message}") }
@@ -114,8 +117,8 @@ internal class DiAutoEngineAccess(context: Context) : AaEngineAccess {
 
     override fun wirelessConfig(): WirelessConfig = settings.let {
         WirelessConfig(
-            mode = it.wifiConnectionMode,
-            transport = it.nativeApTransport,
+            mode = it.wifiConnectionMode.id,
+            transport = it.nativeApStrategy.id,
             hotspotInterface = it.hotspotInterface,
             hotspotSsid = it.hotspotSsid,
             hotspotPassword = it.hotspotPassword,

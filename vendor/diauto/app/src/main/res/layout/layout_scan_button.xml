@@ -9,15 +9,15 @@
         android:id="@+id/scan_button_widget"
         style="@style/Widget.Material3.Button"
         android:minWidth="0dp"
-        android:minHeight="48dp"
+        android:minHeight="0dp"
         app:icon="@drawable/ic_refresh_white"
-        app:iconTint="@color/da_accent"
+        app:iconTint="@android:color/white"
         app:iconGravity="textStart"
         app:iconPadding="0dp"
         android:layout_width="32dp"
         android:layout_height="40dp"
         android:enabled="true"
-        android:textColor="@color/da_accent"
+        android:textColor="@android:color/white"
         app:cornerRadius="20dp"
-        app:backgroundTint="@color/da_surface" />
+        app:backgroundTint="@color/brand_teal" />
 </FrameLayout>

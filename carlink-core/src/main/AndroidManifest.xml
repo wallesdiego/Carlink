@@ -135,11 +135,17 @@
         <service android:name="com.andrerinas.openheadunit.aap.AapService" android:process=":aa" tools:node="merge" />
         <service android:name="com.andrerinas.openheadunit.location.GpsLocationService" android:process=":aa" tools:node="merge" />
         <service android:name="com.andrerinas.openheadunit.aap.DummyVpnService" android:process=":aa" tools:node="merge" />
-        <provider android:name="rikka.shizuku.ShizukuProvider" android:process=":aa" tools:node="merge" />
 
         <receiver android:name="androidx.media.session.MediaButtonReceiver" android:enabled="false" android:process=":aa" tools:node="merge" />
         <receiver android:name="com.andrerinas.openheadunit.app.RemoteControlReceiver" android:enabled="false" android:process=":aa" tools:node="merge" />
-        <receiver android:name="com.andrerinas.openheadunit.connection.CarKeyReceiver" android:enabled="false" android:process=":aa" tools:node="merge" />
+        <receiver android:name="com.andrerinas.openheadunit.connection.carkey.CarKeyBroadcastReceiver" android:enabled="false" android:process=":aa" tools:node="merge" />
+
+        <!-- open-headunit 3.5.0 additions, pinned to ":aa". -->
+        <service android:name="com.andrerinas.openheadunit.main.FloatingButtonService" android:process=":aa" tools:node="merge" />
+        <activity android:name="com.andrerinas.openheadunit.connection.self.PermissionTrampolineActivity" android:process=":aa" tools:node="merge" />
+        <!-- CarLink is not a home launcher, and other apps must not drive the engine (DA§10.9). -->
+        <activity-alias android:name="com.andrerinas.openheadunit.CarLauncherAlias" tools:node="remove" />
+        <receiver android:name="com.andrerinas.openheadunit.automation.AutomationReceiver" tools:node="remove" />
 
         <!-- Replaced by SystemEventReceiver. -->
         <receiver android:name="com.andrerinas.openheadunit.app.BootCompleteReceiver" tools:node="remove" />

@@ -2,7 +2,7 @@ package com.andrerinas.openheadunit.aap
 
 import android.content.Context
 import com.andrerinas.openheadunit.aap.protocol.Channel
-import com.andrerinas.openheadunit.decoder.MicRecorder
+import com.andrerinas.openheadunit.decoder.audio.MicRecorder
 import com.andrerinas.openheadunit.aap.protocol.proto.MediaPlayback
 import com.andrerinas.openheadunit.utils.AppLog
 import com.andrerinas.openheadunit.utils.Settings
@@ -21,51 +21,74 @@ internal class AapMessageHandlerType(
     private val mediaPlayback = AapMediaPlayback(onAaMediaMetadata, onAaPlaybackStatus)
     private val aapNavigation = AapNavigation(context, settings)
 
+    private val dispatchMonitor = TransportDispatchMonitor()
+
+    override fun onDroppedMediaData(channel: Int) {
+        // Reassembly rejection is retired at LAST or a replacement FIRST, synchronously
+        // on the reader before another session can be dispatched.
+        // Return the credit without decoding or queuing the rejected payload.
+        transport.sendMediaAck(channel)
+    }
+
     @Throws(AapMessageHandler.HandleException::class)
     override fun handle(message: AapMessage) {
+        // Anything slow here is time the socket is not read, audio included. Video has its own
+        // thread now, so this should stay near zero; videoQueue is where its backlog shows up.
+        val dispatchStartMs = android.os.SystemClock.elapsedRealtime()
+        try {
+            dispatch(message)
+        } finally {
+            val finishedMs = android.os.SystemClock.elapsedRealtime()
+            dispatchMonitor.onDispatch(
+                message.channel, finishedMs - dispatchStartMs, finishedMs,
+                transport.videoQueueDepth(), transport.videoShedCount()
+            )
+                ?.let { AppLog.i("AapTransport: %s", it) }
+        }
+    }
+
+    private fun dispatch(message: AapMessage) {
 
         // Every decrypted inbound message passes through here, on every channel, which makes this
         // the one place that can say the link is alive rather than just that the picture is moving.
-        // See AapTransport.lastMessageReceivedMs for why that distinction matters.
-        transport.noteMessageReceived()
+        // See AapTransport.lastMessageReceivedMs for why that distinction matters. The channel goes
+        // with it so the media channels can be measured apart from the link: this fault stops video
+        // and audio while leaving control running, and the three are one series here.
+        transport.noteMessageReceived(message.channel, message.size)
 
         val msgType = message.type
         val flags = message.flags
 
-        // 1. Try processing as Video stream first (ID_VID)
-        // High priority for the smoothest possible display.
+        // 1. Video goes to its own worker (ID_VID). DATA credit is returned after that worker
+        // processes the complete message, not after MediaCodec renders it. The queue also has
+        // an explicit bound for peers exceeding their window. This handoff keeps video work
+        // off the shared receive thread so audio can continue to be read and acknowledged.
         if (message.channel == Channel.ID_VID) {
-             if (aapVideo.process(message)) {
-                 if (msgType == 0 || msgType == 1) transport.onMainVideoData()
-                 // Send ACK AFTER processing
-                 if (msgType == 0 || msgType == 1) {
-                     transport.sendMediaAck(message.channel)
-                 }
-                 return
-             }
-        }
-
-        // 1b. The dashboard's own video stream, decoded separately from the main screen. Same
-        // contract as the main stream: fragments carry no type of their own, so every message is
-        // offered and only what the assembler does not consume falls through to control.
-        if (message.channel == Channel.ID_CLUSTER_VID) {
-            if (transport.clusterVideo.process(message)) {
-                if (msgType == 0 || msgType == 1) {
-                    transport.sendMediaAck(message.channel)
-                }
+            // False means control traffic on the video channel, which falls through to step 5 as
+            // it always has. The video thread still sees it either way.
+            if (transport.dispatchVideo(message)) {
                 return
             }
         }
 
         // 2. Try processing as Audio stream (Speech, System, Media)
-        if (message.isAudio) {
-            if (aapAudio.process(message)) {
-                // Send ACK AFTER processing
-                if (msgType == 0 || msgType == 1) {
-                    transport.sendMediaAck(message.channel)
+        if (message.isAudio && AudioMediaPayload.isMedia(msgType)) {
+            val sessionId = transport.getSessionId(message.channel)
+            try {
+                aapAudio.process(message)
+            } finally {
+                // A complete DATA owns one credit even if PCM conversion/decoder handoff
+                // rejects it. The reader catches processing exceptions and continues, so
+                // returning only on success would leave that credit outstanding at the phone.
+                // Android Auto 17.6/17.8 acquire permits for DATA, not CSD, and their timeout
+                // recovery does not make a missing ACK harmless: it can delay later audio.
+                // Reassembly drops never reach this dispatch; they use onDroppedMediaData.
+                // ACK retires receipt, not speaker playback. Keep the receiving session id.
+                if (AudioMediaPayload.requiresAck(msgType)) {
+                    transport.sendMediaAck(message.channel, sessionId)
                 }
-                return
             }
+            return
         }
 
         // 3. Media Playback Status (separate channel)

@@ -15,7 +15,7 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="?attr/actionBarSize"
             app:title="@string/permissions"
             app:navigationIcon="@drawable/ic_arrow_back_white"
             app:titleTextColor="?android:attr/textColorPrimary"
@@ -32,7 +32,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="16dp">
 
             <TextView
                 android:layout_width="match_parent"

@@ -8,7 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
-import com.andrerinas.openheadunit.aap.ExternalBtPolicy
+import com.andrerinas.openheadunit.utils.ExternalBtPolicy
 import com.carlink.core.core.PhoneKind
 import com.carlink.core.diagnostics.EventLog
 import java.io.File

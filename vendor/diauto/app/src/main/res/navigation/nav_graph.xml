@@ -22,13 +22,14 @@
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_homeFragment_to_appDrawerFragment"
+            app:destination="@id/appDrawerFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
     </fragment>
-
-    <fragment android:id="@+id/diagnosticsFragment" android:name="com.andrerinas.openheadunit.main.DiagnosticsFragment" android:label="Diagnostics" />
-
-    <fragment android:id="@+id/connectionSetupFragment" android:name="com.andrerinas.openheadunit.main.ConnectionSetupFragment" android:label="Connection setup" />
-
-    <fragment android:id="@+id/driveSettingsFragment" android:name="com.andrerinas.openheadunit.main.DriveSettingsFragment" android:label="@string/settings" />
 
     <fragment
         android:id="@+id/settingsFragment"
@@ -70,6 +71,13 @@
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right" />
         <action
+            android:id="@+id/action_settingsFragment_to_performanceOverlaySettingsFragment"
+            app:destination="@id/performanceOverlaySettingsFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
             android:id="@+id/action_settingsFragment_to_dpiSettingsFragment"
             app:destination="@id/dpiSettingsFragment"
             app:enterAnim="@anim/slide_in_right"
@@ -94,6 +102,20 @@
         <action
             android:id="@+id/action_settingsFragment_to_loadingScreenFragment"
             app:destination="@id/loadingScreenFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_settingsFragment_to_customizationFragment"
+            app:destination="@id/customizationFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_settingsFragment_to_audioStreamSettingsFragment"
+            app:destination="@id/audioStreamSettingsFragment"
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
@@ -145,6 +167,11 @@
         android:id="@+id/dpiSettingsFragment"
         android:name="com.andrerinas.openheadunit.main.DpiSettingsFragment"
         android:label="@string/dpi" />
+
+    <fragment
+        android:id="@+id/performanceOverlaySettingsFragment"
+        android:name="com.andrerinas.openheadunit.main.PerformanceOverlaySettingsFragment"
+        android:label="@string/performance_overlay_settings" />
 
     <fragment
         android:id="@+id/darkModeFragment"
@@ -223,5 +250,20 @@
         android:id="@+id/micSettingsFragment"
         android:name="com.andrerinas.openheadunit.main.MicSettingsFragment"
         android:label="@string/microphone_settings" />
+
+    <fragment
+        android:id="@+id/audioStreamSettingsFragment"
+        android:name="com.andrerinas.openheadunit.main.AudioStreamSettingsFragment"
+        android:label="@string/audio_stream_settings" />
+
+    <fragment
+        android:id="@+id/customizationFragment"
+        android:name="com.andrerinas.openheadunit.main.CustomizationFragment"
+        android:label="@string/customization_title" />
+
+    <fragment
+        android:id="@+id/appDrawerFragment"
+        android:name="com.andrerinas.openheadunit.main.AppDrawerFragment"
+        android:label="@string/apps" />
 
 </navigation>

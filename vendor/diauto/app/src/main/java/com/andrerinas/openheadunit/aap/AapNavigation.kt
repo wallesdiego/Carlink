@@ -10,14 +10,12 @@ import com.andrerinas.openheadunit.utils.Settings
 
 /**
  * Handles navigation messages from the ID_NAV channel from any Android Auto-enabled app
- * (Google Maps, Yandex Maps, etc.). Shows notifications with turn-by-turn directions and current street.
+ * (Google Maps, Yandex Maps, etc.). Shows notifications with turn-by-turn directions and the road names.
  */
 class AapNavigation(
     private val context: Context,
     private val settings: Settings
 ) {
-    init { com.andrerinas.openheadunit.hud.BydNavigationOutputs.start(context) }
-
     private val helper = AapNavigationHelper(context)
     private val snapshot = AapNavigationHelper.NavigationSnapshot()
     private val debounceHandler = Handler(Looper.getMainLooper())
@@ -62,10 +60,6 @@ class AapNavigation(
                 try {
                     val detail = message.parse(NavigationStatus.NextTurnDetail.newBuilder()).buildPartial()
                     snapshot.nextTurnDetail = AapNavigationHelper.TimedMessage(detail, helper.nowElapsedRealtimeMs())
-                    val road = detail.road.takeIf { it.isNotBlank() }
-                    road?.let {
-                        snapshot.currentStreet = AapNavigationHelper.TimedMessage(it, helper.nowElapsedRealtimeMs())
-                    }
                     AppLog.d(
                         "Nav: NextTurnDetail road=${detail.road} " +
                                 "hasNextTurn=${detail.hasNextTurn()} nextTurn=${detail.nextTurn}"
@@ -104,14 +98,7 @@ class AapNavigation(
                 try {
                     val state = message.parse(NavigationStatus.NavigationState.newBuilder()).build()
                     snapshot.navigationState = AapNavigationHelper.TimedMessage(state, helper.nowElapsedRealtimeMs())
-                    val firstStepRoad = state.stepsList.firstOrNull()
-                        ?.takeIf { it.hasRoad() && it.road.hasName() }
-                        ?.road
-                        ?.name
-                        ?.takeIf { it.isNotBlank() }
-                    if (!firstStepRoad.isNullOrBlank()) {
-                        snapshot.currentStreet = AapNavigationHelper.TimedMessage(firstStepRoad, helper.nowElapsedRealtimeMs())
-                    }
+                    AppLog.d("Nav: NavigationState steps=${state.stepsCount} maneuverRoad=${NavigationRoadPolicy.maneuverRoad(state, null) ?: "(none)"}")
                     scheduleDebouncedBroadcast(NAV_EVENT_TYPE_STATE)
                     true
                 } catch (e: Exception) {
@@ -123,15 +110,7 @@ class AapNavigation(
                 try {
                     val position = message.parse(NavigationStatus.NavigationCurrentPosition.newBuilder()).build()
                     snapshot.currentPosition = AapNavigationHelper.TimedMessage(position, helper.nowElapsedRealtimeMs())
-                    val road = position
-                        .takeIf { it.hasCurrentRoad() && it.currentRoad.hasName() }
-                        ?.currentRoad
-                        ?.name
-                        ?.takeIf { it.isNotBlank() }
-                        ?: snapshot.currentStreet?.payload
-                    if (!road.isNullOrBlank()) {
-                        snapshot.currentStreet = AapNavigationHelper.TimedMessage(road, helper.nowElapsedRealtimeMs())
-                    }
+                    AppLog.d("Nav: CurrentPosition currentRoad=${NavigationRoadPolicy.currentRoad(position) ?: "(none)"}")
                     scheduleDebouncedBroadcast(NAV_EVENT_TYPE_CURRENT_POSITION)
                     true
                 } catch (e: Exception) {
@@ -152,7 +131,6 @@ class AapNavigation(
         snapshot.nextTurnDistance = null
         snapshot.navigationState = null
         snapshot.currentPosition = null
-        snapshot.currentStreet = null
     }
 
     private fun clearAccumulatedDataPreservingStatus(
@@ -176,16 +154,6 @@ class AapNavigation(
     }
 
     private fun scheduleDebouncedBroadcast(navEventType: Int) {
-        // The dashboard turn card shows the same mapped guidance as the HUD.
-        val turnCard = settings.clusterMapEnabled && settings.clusterTurnCardOverlay
-        val mapped = if (settings.bydNavigationEnabled || turnCard) com.andrerinas.openheadunit.hud.BydNavigationMapper.from(snapshot, settings.bydLeftHandTraffic) else null
-        val bydFrame = if (settings.bydNavigationEnabled) mapped else null
-        com.andrerinas.openheadunit.hud.DashboardGuidance.latest = if (turnCard) mapped else null
-        AppLog.i("BYD nav input event=$navEventType enabled=${settings.bydNavigationEnabled} " +
-            "status=${snapshot.clusterStatus?.payload?.status} steps=${snapshot.navigationState?.payload?.stepsCount} " +
-            "legacy=${snapshot.nextTurnDetail?.payload?.nextTurn} position=${snapshot.currentPosition != null} " +
-            "distance=${bydFrame?.distanceMeters} icon=${bydFrame?.clusterIcon}")
-        com.andrerinas.openheadunit.hud.BydNavigationOutputs.update(bydFrame)
         pendingNavEventType = navEventType
         if (isBroadcastScheduled) return
         isBroadcastScheduled = true

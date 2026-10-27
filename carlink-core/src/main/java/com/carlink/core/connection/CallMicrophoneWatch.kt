@@ -43,7 +43,9 @@ internal class CallMicrophoneWatch(context: Context) {
             return
         }
         // Off the main thread: the gateway-role check waits for a profile proxy (BluetoothHelper).
-        val handsFree = BluetoothHelper.handsFreeLinkState(app, DeviceEnvironment.lastPhoneAddress(app))
+        val handsFree = // open-headunit 3.5.0: the head unit's own (client) hands-free role only; a tablet's earbuds
+        // (gateway role) are not the stereo's phone.
+        BluetoothHelper.handsFreeLinkState(app, includeGatewayRole = false)
         val conflict = conflict(mode, handsFree, configs.size)
         EventLog.add("CarLink", "call: audioMode=$mode recordings=${configs.map { it.clientAudioSource }} " +
             "stereoHandsFree=${handsFree ?: "unknown"} conflict=$conflict")

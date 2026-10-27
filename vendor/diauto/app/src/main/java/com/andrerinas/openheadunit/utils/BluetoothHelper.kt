@@ -1,21 +1,25 @@
 package com.andrerinas.openheadunit.utils
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Build
 import android.os.IBinder
 import com.andrerinas.openheadunit.App
-import com.andrerinas.openheadunit.aap.ExternalBtPolicy
+import com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.DriverCandidatePolicy
 import java.lang.reflect.Constructor
+import java.lang.reflect.Method
+import com.andrerinas.openheadunit.connection.wifi.MacAddressPolicy
 
 object BluetoothHelper {
 
     fun getBluetoothAdapter(context: Context): BluetoothAdapter? {
         val settings = App.provide(context).settings
         val serviceName = settings.bluetoothManagerServiceName
-        
+
         if (serviceName.isEmpty() || serviceName == "bluetooth_manager") {
             return getDefaultAdapter(context)
         }
@@ -64,7 +68,9 @@ object BluetoothHelper {
             ctor.isAccessible = true
             ctor.newInstance(managerService) as? BluetoothAdapter
         } catch (e: Exception) {
-            AppLog.e("BluetoothHelper: adapterForService($serviceName) failed: ${e.message}", e)
+            // Not an error. The service sweep matches on name fragments, so most candidates are not
+            // Bluetooth managers at all and throw here; skipping them is the documented outcome.
+            AppLog.d("BluetoothHelper: adapterForService($serviceName) failed: ${e.message}")
             null
         }
     }
@@ -87,10 +93,6 @@ object BluetoothHelper {
         return result.filter { try { it.adapter.isEnabled } catch (e: Exception) { false } }
     }
 
-    /** All distinct, enabled Bluetooth adapters exposed by the system. See [getAllBluetoothAdapterHandles]. */
-    fun getAllBluetoothAdapters(context: Context): List<BluetoothAdapter> =
-        getAllBluetoothAdapterHandles(context).map { it.adapter }
-
     /**
      * `BluetoothProfile.HEADSET_CLIENT`. Hidden from the SDK, but
      * [BluetoothAdapter.getProfileConnectionState] takes a plain profile int and answers for it, and
@@ -100,26 +102,32 @@ object BluetoothHelper {
     private const val PROFILE_HEADSET_CLIENT = 16
 
     /**
-     * Whether this head unit currently holds a Bluetooth hands-free link, in either role.
-     *
-     * Null when the adapter will not say. Callers must treat that as "no link known" rather than
-     * "no link", because the only decision hanging off this is whether to skip an action that is
-     * load-bearing elsewhere.
-     *
-     * Both roles are read. `HEADSET_CLIENT` is the one a head unit normally plays and the one the
-     * wake poke was measured destroying; `HEADSET` is checked too because some OEM stacks report a
-     * hands-free connection under the gateway role instead, and for this decision a false "yes" only
-     * costs a skipped poke while a false "no" costs the user their calls.
-     *
-     * Profile-wide, not per-device: `getProfileConnectionState` answers for the adapter, and the
-     * per-device equivalents are system-only. On a head unit paired with one phone that distinction
-     * does not arise; where it does, this errs toward reporting a link.
+     * Whether this unit holds a hands-free link, adapter-wide; null when the adapter will not say.
+     * `HEADSET_CLIENT` is the role a head unit plays and the one the wake poke was measured
+     * destroying. [includeGatewayRole] adds `HEADSET`, the phone's role, which some OEM stacks report
+     * a hands-free connection under.
      */
-    fun handsFreeLinkState(context: Context, pokedAddress: String? = null): Boolean? { // CarLink: pokedAddress
+    fun handsFreeLinkState(context: Context, includeGatewayRole: Boolean = true): Boolean? {
+        val roles = if (includeGatewayRole) {
+            intArrayOf(PROFILE_HEADSET_CLIENT, BluetoothProfile.HEADSET)
+        } else {
+            intArrayOf(PROFILE_HEADSET_CLIENT)
+        }
+        return profileLinkState(context, roles, "hands-free")
+    }
+
+    /**
+     * Whether this unit holds a hands-free link in the gateway role alone: it is the phone side of
+     * that link, so the other end is a car kit or headset, never a phone the wake poke could reach.
+     */
+    fun gatewayHandsFreeLinkState(context: Context): Boolean? =
+        profileLinkState(context, intArrayOf(BluetoothProfile.HEADSET), "gateway hands-free")
+
+    private fun profileLinkState(context: Context, roles: IntArray, what: String): Boolean? {
         val resolved = try {
             getBluetoothAdapter(context)
         } catch (e: Exception) {
-            AppLog.w("BluetoothHelper: could not resolve an adapter for the hands-free check: ${e.message}")
+            AppLog.w("BluetoothHelper: could not resolve an adapter for the $what check: ${e.message}")
             return null
         }
         val adapter = resolved ?: return false
@@ -127,50 +135,18 @@ object BluetoothHelper {
         if (enabled == false) return false
 
         var readAnyState = false
-        for (profile in intArrayOf(PROFILE_HEADSET_CLIENT, BluetoothProfile.HEADSET)) {
+        for (profile in roles) {
             val state = try {
                 adapter.getProfileConnectionState(profile)
             } catch (e: Exception) {
                 // SecurityException without BLUETOOTH_CONNECT, or an adapter that rejects the
-                // hidden client profile. Try the other role before giving up.
+                // hidden client profile. Try any remaining role before giving up.
                 continue
             }
             readAnyState = true
-            if (state != BluetoothProfile.STATE_CONNECTED) continue
-            // CarLink: a gateway-role link counts only when it is to the poked phone.
-            if (profile == BluetoothProfile.HEADSET && !com.andrerinas.openheadunit.aap.BluetoothWakePolicy
-                    .gatewayLinkBlocksPoke(pokedAddress, headsetPeers(context, adapter))) continue
-            return true
+            if (state == BluetoothProfile.STATE_CONNECTED) return true
         }
         return if (readAnyState) false else null
-    }
-
-    /**
-     * CarLink: addresses connected to this unit's `HEADSET` (gateway) profile, or null when they
-     * cannot be read. Public API, but the proxy arrives on the main thread, so this blocks briefly
-     * and must not run there.
-     */
-    private fun headsetPeers(context: Context, adapter: BluetoothAdapter): Set<String>? {
-        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        var proxy: BluetoothProfile? = null
-        val listener = object : BluetoothProfile.ServiceListener {
-            override fun onServiceConnected(profile: Int, connected: BluetoothProfile) {
-                proxy = connected
-                latch.countDown()
-            }
-            override fun onServiceDisconnected(profile: Int) {}
-        }
-        return try {
-            if (!adapter.getProfileProxy(context.applicationContext, listener, BluetoothProfile.HEADSET)) return null
-            if (!latch.await(1, java.util.concurrent.TimeUnit.SECONDS)) return null
-            proxy?.connectedDevices?.map { it.address.uppercase() }?.toSet()
-        } catch (e: Exception) {
-            AppLog.i("BluetoothHelper: could not read the headset peers: ${e.javaClass.simpleName}: ${e.message}")
-            null
-        } finally {
-            proxy?.let { runCatching { adapter.closeProfileProxy(BluetoothProfile.HEADSET, it) } }
-        }
     }
 
     /**
@@ -238,106 +214,270 @@ object BluetoothHelper {
         return false
     }
 
-    /** Resolve a single, arbitrary system service name to a BluetoothAdapterHandle, if it backs a
-     *  real, enabled adapter. Used for the manual secondary-radio override in Settings, where the
-     *  user supplies a service name automatic discovery (listBluetoothServices()) didn't find.
-     *  Forgiving of the AIDL interface descriptor `adb shell service list` prints in brackets
-     *  (e.g. "com.qf.btsdk.IBTBinderPool") in place of the actual service name before the colon
-     *  (e.g. "btBinderPool"): users copy the bracketed part, it being the more distinctive-looking
-     *  of the two. */
-    fun getAdapterHandleForService(context: Context, serviceName: String): BluetoothAdapterHandle? {
-        val input = serviceName.trim().removePrefix("[").removeSuffix("]").trim()
-        if (input.isEmpty()) return null
-        val resolvedName = if (serviceExists(input)) input else findServiceNameByInterfaceDescriptor(input) ?: input
-        val adapter = adapterForService(context, resolvedName) ?: return null
-        return try { if (adapter.isEnabled) BluetoothAdapterHandle(resolvedName, adapter) else null }
-        catch (e: Exception) { null }
-    }
-
-    private fun serviceExists(name: String): Boolean = try {
-        val serviceManagerClass = Class.forName("android.os.ServiceManager")
-        val getServiceMethod = serviceManagerClass.getMethod("getService", String::class.java)
-        getServiceMethod.invoke(null, name) != null
-    } catch (e: Exception) { false }
-
-    /** Reverse-looks-up a system service by its AIDL interface descriptor (the bracketed part of
-     *  `adb shell service list` output) instead of its name (the part before the colon).
-     *  IBinder.getInterfaceDescriptor() is a standard, side-effect-free query safe to call on any
-     *  service, unlike actually invoking interface methods on a mismatched proxy - so this is safe
-     *  to run across every registered service, not just ones already known to be Bluetooth-shaped. */
-    private fun findServiceNameByInterfaceDescriptor(descriptor: String): String? {
-        return try {
-            val serviceManagerClass = Class.forName("android.os.ServiceManager")
-            val listServicesMethod = serviceManagerClass.getMethod("listServices")
-            val getServiceMethod = serviceManagerClass.getMethod("getService", String::class.java)
-            val services = listServicesMethod.invoke(null) as? Array<String> ?: return null
-            services.firstOrNull { name ->
-                try {
-                    val binder = getServiceMethod.invoke(null, name) as? IBinder
-                    binder?.interfaceDescriptor == descriptor
-                } catch (e: Exception) {
-                    false
-                }
-            }
+    private val isConnectedMethod: Method? by lazy {
+        try {
+            BluetoothDevice::class.java.getMethod("isConnected")
         } catch (e: Exception) {
-            AppLog.e("BluetoothHelper: findServiceNameByInterfaceDescriptor($descriptor) failed: ${e.message}", e)
             null
         }
     }
 
     /**
-     * Resolves the real Bluetooth MAC address of the headunit's Bluetooth chip.
-     * On Android 6+ (API 23+), adapter.address returns dummy "02:00:00:00:00:00".
-     * We fall back to reflection and Chinese OEM SystemProperties to find the true hardware BDADDR.
+     * Whether [device] is connected to this unit, or null when that cannot be read.
+     *
+     * Reflection on the hidden `BluetoothDevice.isConnected`, which needs only BLUETOOTH_CONNECT and
+     * carries no `maxTargetSdk`, so it answers on API 21 through 36. It does not exist before API 21,
+     * where this returns null rather than a wrong "not connected".
      */
+    fun deviceConnectionState(device: BluetoothDevice): Boolean? {
+        val method = isConnectedMethod ?: return null
+        return try {
+            method.invoke(device) as? Boolean
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Checks whether a specific Bluetooth device is currently connected to this unit.
+     *
+     * An unreadable answer counts as not connected. Callers that must tell those apart - a guard
+     * that would act on absence - ask [deviceConnectionState] instead.
+     */
+    fun isDeviceConnected(device: BluetoothDevice): Boolean = deviceConnectionState(device) == true
+
+    /** One bonded device with the policy's verdict on it. */
+    data class DriverCandidate(
+        val device: BluetoothDevice,
+        val classification: DriverCandidatePolicy.Classification,
+        val connected: Boolean
+    ) {
+        val verdict: DriverCandidatePolicy.Verdict get() = classification.verdict
+    }
+
+    /**
+     * Every bonded device classified, and the tier offered as a driver: the phones, else the
+     * devices nothing could classify, never the ones ruled out. Those stay reachable by a
+     * deliberate tap under "Show all"; nothing automatic reaches for them.
+     */
+    class DriverCandidates(val all: List<DriverCandidate>, val presenceReadable: Boolean) {
+        val offeredVerdict: DriverCandidatePolicy.Verdict =
+            DriverCandidatePolicy.offeredVerdict(all.map { it.verdict })
+        val offered: List<BluetoothDevice> =
+            if (offeredVerdict == DriverCandidatePolicy.Verdict.NOT_A_PHONE) emptyList()
+            else all.filter { it.verdict == offeredVerdict }.map { it.device }
+        val hidden: List<DriverCandidate> = all.filter { it.verdict != offeredVerdict || offered.isEmpty() }
+        val connectedAll: List<BluetoothDevice> = all.filter { it.connected }.map { it.device }
+        val connectedOffered: List<BluetoothDevice> =
+            connectedAll.filter { device -> offered.any { it.address == device.address } }
+
+        fun verdictOf(mac: String): DriverCandidatePolicy.Verdict =
+            all.firstOrNull { it.device.address.equals(mac, ignoreCase = true) }?.verdict
+                ?: DriverCandidatePolicy.Verdict.UNKNOWN
+
+        fun deviceFor(mac: String?): BluetoothDevice? =
+            mac?.let { m -> all.firstOrNull { it.device.address.equals(m, ignoreCase = true) }?.device }
+    }
+
+    @Volatile
+    private var lastCandidateSummary: String? = null
+
+    /**
+     * The bonded devices classified for driver selection and the wake poke. Enumerated every poke
+     * round and every resume, so the roll-up is INFO only when its composition changes.
+     */
+    @SuppressLint("MissingPermission")
+    fun driverCandidates(context: Context, preferredMac: String, lastConnectedMac: String): DriverCandidates {
+        val adapter = try { getBluetoothAdapter(context) } catch (e: Exception) { null }
+        val bonded = try { adapter?.bondedDevices?.toList() ?: emptyList() } catch (e: Exception) { emptyList() }
+        var presenceReadable = false
+        val all = bonded.map { device ->
+            val state = deviceConnectionState(device)
+            if (state != null) presenceReadable = true
+            val classification = classifyDevice(device, pinFor(device, preferredMac, lastConnectedMac))
+            AppLog.d(
+                "BluetoothHelper: driver candidate ${device.name} (${device.address}) -> " +
+                    "${classification.verdict}, ${DriverCandidatePolicy.reasonText(classification, deviceClassOf(device))}"
+            )
+            DriverCandidate(device, classification, state == true)
+        }
+        val candidates = DriverCandidates(all, presenceReadable)
+        val counts = DriverCandidatePolicy.Verdict.entries.joinToString(", ") { verdict ->
+            "${all.count { it.verdict == verdict }} ${verdict.name.lowercase().replace('_', ' ')}"
+        }
+        val hidden = candidates.hidden.joinToString {
+            "${it.device.name} (${it.classification.reason.name.lowercase().replace('_', ' ')})"
+        }
+        val summary = "BluetoothHelper: driver candidates: $counts" +
+            if (hidden.isEmpty()) "" else " - hidden: $hidden"
+        if (summary != lastCandidateSummary) {
+            lastCandidateSummary = summary
+            AppLog.i(summary)
+        } else {
+            AppLog.d(summary)
+        }
+        return candidates
+    }
+
+    /** The policy's verdict on one device, read from what the bond cached: records, class, type. */
+    @SuppressLint("MissingPermission")
+    fun classifyDevice(device: BluetoothDevice, pin: DriverCandidatePolicy.Pin): DriverCandidatePolicy.Classification {
+        val uuids = try { device.uuids?.map { it.uuid.toString() } } catch (e: Exception) { null }
+        val btClass = try { device.bluetoothClass } catch (e: Exception) { null }
+        val type = if (Build.VERSION.SDK_INT >= 18) {
+            try { device.type } catch (e: Exception) { DriverCandidatePolicy.DEVICE_TYPE_UNKNOWN }
+        } else {
+            DriverCandidatePolicy.DEVICE_TYPE_UNKNOWN
+        }
+        return DriverCandidatePolicy.classify(
+            uuids = uuids,
+            hasDeviceClass = btClass != null,
+            majorDeviceClass = btClass?.majorDeviceClass ?: 0,
+            deviceClass = btClass?.deviceClass ?: 0,
+            deviceType = type,
+            pin = pin
+        )
+    }
+
+    /** The last-connected MAC was written by a completed handshake; the preferred one was typed. */
+    fun pinFor(device: BluetoothDevice, preferredMac: String, lastConnectedMac: String): DriverCandidatePolicy.Pin {
+        val address = try { device.address } catch (_: Exception) { "" }
+        return when {
+            address.isEmpty() -> DriverCandidatePolicy.Pin.NONE
+            address.equals(lastConnectedMac, ignoreCase = true) -> DriverCandidatePolicy.Pin.PROVEN
+            address.equals(preferredMac, ignoreCase = true) -> DriverCandidatePolicy.Pin.USER
+            else -> DriverCandidatePolicy.Pin.NONE
+        }
+    }
+
+    private fun deviceClassOf(device: BluetoothDevice): Int =
+        try { device.bluetoothClass?.deviceClass ?: 0 } catch (e: Exception) { 0 }
+
+    /**
+     * Whether one device may stand as a phone, meaning it was not ruled out. Lists go through
+     * [driverCandidates]; this serves the pickers that ask about one device at a time.
+     */
+    fun isLikelyPhone(
+        device: BluetoothDevice,
+        preferredMac: String = "",
+        lastConnectedMac: String = ""
+    ): Boolean = classifyDevice(device, pinFor(device, preferredMac, lastConnectedMac)).verdict !=
+        DriverCandidatePolicy.Verdict.NOT_A_PHONE
+
+
+    /**
+     * Resolves the real Bluetooth MAC address of this head unit's Bluetooth chip, or null.
+     *
+     * `adapter.address` is the fixed placeholder `02:00:00:00:00:00` for any non-privileged app
+     * since Android 6.0, so most of this is fallbacks. When they all fail, [logAddressSourceDump]
+     * says what each one answered, because "could not be read" tells a reporter's log nothing.
+     */
+    @SuppressLint("MissingPermission", "HardwareIds")
     fun getBluetoothMacAddress(context: Context, adapter: BluetoothAdapter? = null): String? {
         val targetAdapter = adapter ?: getBluetoothAdapter(context)
-        
-        // 1. Try standard adapter property if valid
-        try {
-            val addr = targetAdapter?.address
-            if (!addr.isNullOrEmpty() && addr != "02:00:00:00:00:00" && addr != "00:00:00:00:00:00") {
-                return addr.uppercase()
-            }
-        } catch (e: SecurityException) {
-            AppLog.w("BluetoothHelper: SecurityException reading adapter address")
-        } catch (e: Exception) {}
 
-        // 2. Try reflection via hidden getAddress() on BluetoothAdapter / IBluetooth
-        try {
-            if (targetAdapter != null) {
-                val getAddressMethod = targetAdapter.javaClass.getMethod("getAddress")
-                getAddressMethod.isAccessible = true
-                val addr = getAddressMethod.invoke(targetAdapter) as? String
-                if (!addr.isNullOrEmpty() && addr != "02:00:00:00:00:00" && addr != "00:00:00:00:00:00") {
-                    return addr.uppercase()
-                }
-            }
-        } catch (e: Exception) {}
+        // 1. The public API. Masked on every device since API 23, kept for the ones that are not.
+        val direct = adapterAddress(targetAdapter)
+        if (direct != null) return direct.uppercase()
 
-        // 3. Fallback to Chinese Headunit Vendor System Properties
-        val propKeys = arrayOf(
-            "persist.sys.bt.mac",
-            "persist.sys.btmac",
-            "persist.vendor.bt.mac",
-            "sys.bt.mac",
-            "persist.sys.bluetooth.mac",
-            "ro.boot.btmacaddr",
-            "vendor.bt.bdaddr",
-            "persist.zj.BTmac",
-            "persist.zlink.carplay.mac",
-            "sys.bt.bdaddr"
-        )
+        // 2. Reflection over getAddress(). Resolves to the same public method on a stock ROM, so it
+        // only differs where a vendor overrode it - which some head units do.
+        val reflected = reflectedAddress(targetAdapter)
+        if (reflected != null) return reflected.uppercase()
 
-        for (key in propKeys) {
-            val valStr = SystemProperties.get(key, "").trim()
-            if (valStr.isNotEmpty() && isValidMacAddress(valStr)) {
-                AppLog.i("BluetoothHelper: Resolved hardware BT MAC $valStr from property $key")
-                return valStr.uppercase()
+        // 3. Where Android's own settings screen reads it, and no permission gates it.
+        val secure = secureSettingAddress(context)
+        if (secure != null) return secure.uppercase()
+
+        // 4. Vendor properties, for head units that publish it.
+        for (key in ADDRESS_PROPERTY_KEYS) {
+            val normalized = normalizeMacAddress(SystemProperties.get(key, ""))
+            if (normalized != null) {
+                AppLog.i("BluetoothHelper: Resolved hardware BT MAC $normalized from property $key")
+                return normalized
             }
         }
 
+        logAddressSourceDump(context, targetAdapter)
         return null
+    }
+
+    private val ADDRESS_PROPERTY_KEYS = arrayOf(
+        "persist.sys.bt.mac",
+        "persist.sys.btmac",
+        "persist.vendor.bt.mac",
+        "sys.bt.mac",
+        "persist.sys.bluetooth.mac",
+        "ro.boot.btmacaddr",
+        "vendor.bt.bdaddr",
+        "persist.zj.BTmac",
+        "persist.zlink.carplay.mac",
+        "sys.bt.bdaddr"
+    )
+
+    @SuppressLint("MissingPermission", "HardwareIds")
+    private fun adapterAddress(adapter: BluetoothAdapter?): String? = try {
+        adapter?.address?.takeIf { isValidMacAddress(it) }
+    } catch (e: SecurityException) {
+        AppLog.w("BluetoothHelper: SecurityException reading adapter address")
+        null
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun reflectedAddress(adapter: BluetoothAdapter?): String? = try {
+        adapter?.let {
+            val method = it.javaClass.getMethod("getAddress")
+            method.isAccessible = true
+            (method.invoke(it) as? String)?.takeIf { addr -> isValidMacAddress(addr) }
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun secureSettingAddress(context: Context): String? = try {
+        android.provider.Settings.Secure
+            .getString(context.contentResolver, "bluetooth_address")
+            ?.trim()
+            ?.takeIf { isValidMacAddress(it) }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Once per process: the answer is a property of the hardware, and this is called per row render. */
+    @Volatile
+    private var addressSourceDumped = false
+
+    /**
+     * One line per source with what it answered, in the shape of WifiDirectManager's BSSID dump.
+     * Logged only when every source failed, which is the only time the detail is worth the lines.
+     */
+    private fun logAddressSourceDump(context: Context, adapter: BluetoothAdapter?) {
+        if (addressSourceDumped) return
+        addressSourceDumped = true
+        AppLog.i("BluetoothHelper: == Bluetooth address source dump ==")
+        val sources = linkedMapOf<String, String?>(
+            "adapter.address" to try { adapter?.address } catch (e: Exception) { null },
+            "getAddress() reflection" to try {
+                adapter?.javaClass?.getMethod("getAddress")
+                    ?.also { it.isAccessible = true }
+                    ?.invoke(adapter) as? String
+            } catch (e: Exception) { null },
+            "Settings.Secure bluetooth_address" to try {
+                android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_address")
+            } catch (e: Exception) { null }
+        )
+        for (key in ADDRESS_PROPERTY_KEYS) {
+            sources["property $key"] = SystemProperties.get(key, "").trim().ifEmpty { null }
+        }
+        for ((label, value) in sources) {
+            AppLog.i("BluetoothHelper:   ${label.padEnd(36)} = ${value ?: "null"}")
+        }
+        AppLog.i("BluetoothHelper: == end Bluetooth address source dump ==")
+        AppLog.w("BluetoothHelper: no source named this unit's Bluetooth address. Read it under " +
+            "Settings/About/Status, or off the paired phone under the gear beside this device, and " +
+            "enter it under Wireless connection. Without it the phone is not told where to connect " +
+            "hands-free and no setup QR can be drawn.")
     }
 
     /**
@@ -346,21 +486,48 @@ object BluetoothHelper {
      * [ExternalBtPolicy] for what the evidence means and why it decides whether Bluetooth-based
      * wireless can work here at all.
      *
-     * Cached: the answer is a property of the hardware and cannot change within a process, and
-     * this is consulted on every handshake start.
+     * A positive answer is held for the process; a negative one is re-read, because the vendor app
+     * sets its properties only once it has run after a boot.
      */
-    val externalBtEvidence: String? by lazy {
+    private val externalBtLatch = ExternalBtPolicy.Latch {
         ExternalBtPolicy.detect(
             nodeExists = { path -> try { java.io.File(path).exists() } catch (e: Exception) { false } },
             property = { key -> SystemProperties.get(key, "") }
         )
     }
 
-    private fun isValidMacAddress(mac: String): Boolean {
-        if (mac == "02:00:00:00:00:00" || mac == "00:00:00:00:00:00") return false
-        val regex = Regex("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")
-        return regex.matches(mac)
+    val externalBtEvidence: String?
+        get() = externalBtLatch.evidence()
+
+    /**
+     * Evidence that this is an FYT unit with an external module on `/dev/auto_serial`, or null.
+     * See [ExternalBtPolicy.detectFytModule]. Latched the same way: the node can appear late.
+     */
+    private val fytModuleLatch = ExternalBtPolicy.Latch {
+        ExternalBtPolicy.detectFytModule(
+            nodeExists = { path ->
+                // SELinux can hide the pts behind the link, so a listing of /dev is the fallback.
+                try {
+                    java.io.File(path).exists() ||
+                        java.io.File(path).parentFile?.list()?.contains(java.io.File(path).name) == true
+                } catch (e: Exception) { false }
+            },
+            property = { key -> SystemProperties.get(key, "") }
+        )
     }
+
+    val fytModuleEvidence: String?
+        get() = fytModuleLatch.evidence()
+
+    /**
+     * The address as canonical `AA:BB:CC:DD:EE:FF`, or null when it is not an address at all.
+     *
+     * Bluetooth is the one caller that accepts the separator-less form, because vendor properties
+     * publish it that way. [MacAddressPolicy.parse] carries the rule and what it cost to learn.
+     */
+    fun normalizeMacAddress(raw: String?): String? = MacAddressPolicy.parse(raw, allowBare = true)
+
+    private fun isValidMacAddress(mac: String): Boolean = normalizeMacAddress(mac) != null
 
     fun listBluetoothServices(): List<String> {
         val bluetoothServices = mutableListOf<String>()
@@ -380,7 +547,7 @@ object BluetoothHelper {
         } catch (e: Exception) {
             AppLog.e("BluetoothHelper: Failed to list bluetooth services from ServiceManager: ${e.message}", e)
         }
-        
+
         if (!bluetoothServices.contains("bluetooth_manager")) {
             bluetoothServices.add(0, "bluetooth_manager")
         }

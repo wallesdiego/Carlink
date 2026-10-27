@@ -7,8 +7,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import com.andrerinas.openheadunit.App
-import com.andrerinas.openheadunit.connection.UsbDeviceCompat
-import com.andrerinas.openheadunit.connection.UsbReceiver
+import com.andrerinas.openheadunit.connection.usb.UsbDeviceCompat
+import com.andrerinas.openheadunit.connection.usb.UsbDeviceDiagnostics
+import com.andrerinas.openheadunit.connection.usb.UsbReceiver
+import com.andrerinas.openheadunit.utils.AppLog
 import com.andrerinas.openheadunit.utils.Settings
 
 class MainViewModel(application: Application): AndroidViewModel(application), UsbReceiver.Listener {
@@ -47,7 +49,11 @@ class MainViewModel(application: Application): AndroidViewModel(application), Us
     }
 
     private fun createDeviceList(allowDevices: Set<String>): List<UsbDeviceCompat> {
-        val manager = app.getSystemService(android.content.Context.USB_SERVICE) as UsbManager
+        val manager = UsbDeviceCompat.usbManager(app) ?: run {
+            AppLog.w("MainViewModel: USB service is unavailable; USB device list is empty")
+            return emptyList()
+        }
+        UsbDeviceDiagnostics.logDeviceList(app, manager, "USB list")
         val devices = manager.deviceList.values.map { UsbDeviceCompat(it) }
         return filterAndSort(devices, allowDevices)
     }

@@ -5,9 +5,16 @@ import android.widget.Toast
 import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.HostIntegration
 
+/**
+ * The one seam every toast goes through. Connection, disconnect and mode-switch status takes the
+ * default and obeys the setting, which is what its description promises; pass [force] for anything
+ * that must arrive whatever the setting says, meaning a failure, a refusal, or a confirmation
+ * outside the connection flow. A null context skips: a toast is never worth a crash.
+ */
 object ToastUtils {
     @JvmStatic
-    fun showToast(context: Context, text: String, duration: Int = Toast.LENGTH_SHORT, force: Boolean = false) {
+    fun showToast(context: Context?, text: String, duration: Int = Toast.LENGTH_SHORT, force: Boolean = false) {
+        if (context == null) return
         if (HostIntegration.toastHandler?.invoke(context, text, force) == true) return // CarLink
         if (force || isToastEnabled(context)) {
             Toast.makeText(context, text, duration).show()
@@ -15,7 +22,8 @@ object ToastUtils {
     }
 
     @JvmStatic
-    fun showToast(context: Context, resId: Int, duration: Int = Toast.LENGTH_SHORT, force: Boolean = false) {
+    fun showToast(context: Context?, resId: Int, duration: Int = Toast.LENGTH_SHORT, force: Boolean = false) {
+        if (context == null) return
         if (HostIntegration.toastHandler?.invoke(context, context.getText(resId), force) == true) return // CarLink
         if (force || isToastEnabled(context)) {
             Toast.makeText(context, resId, duration).show()

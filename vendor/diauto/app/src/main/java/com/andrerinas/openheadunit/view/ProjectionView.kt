@@ -5,10 +5,11 @@ import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.andrerinas.openheadunit.App
-import com.andrerinas.openheadunit.decoder.DecoderStopPolicy
-import com.andrerinas.openheadunit.decoder.VideoDecoder
+import com.andrerinas.openheadunit.decoder.video.DecoderStopPolicy
+import com.andrerinas.openheadunit.decoder.video.VideoDecoder
 import com.andrerinas.openheadunit.utils.AppLog
 import com.andrerinas.openheadunit.utils.HeadUnitScreenConfig
+import com.andrerinas.openheadunit.utils.Settings
 
 class ProjectionView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -28,7 +29,7 @@ class ProjectionView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         // The decoder is a singleton and this view may be a discarded instance detaching after a
         // replacement already claimed it, so only stop the decoder if this surface still owns it.
-        videoDecoder?.stopIfCurrentSurface(holder.surface, DecoderStopPolicy.REASON_DETACHED_FROM_WINDOW)
+        videoDecoder?.detachSurfaceIfCurrent(holder.surface, DecoderStopPolicy.REASON_DETACHED_FROM_WINDOW)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -49,7 +50,7 @@ class ProjectionView @JvmOverloads constructor(
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         AppLog.i("holder $holder")
-        videoDecoder?.stopIfCurrentSurface(holder.surface, DecoderStopPolicy.REASON_SURFACE_DESTROYED)
+        videoDecoder?.detachSurfaceIfCurrent(holder.surface, DecoderStopPolicy.REASON_SURFACE_DESTROYED)
         callbacks.forEach { it.onSurfaceDestroyed(holder.surface) }
     }
 
@@ -73,11 +74,14 @@ class ProjectionView @JvmOverloads constructor(
 
         if (HeadUnitScreenConfig.forcedScale) {
             val settings = App.provide(context).settings
-            if (settings.stretchToFill) {
-                holder.setSizeFromLayout()
-            } else {
+            if (settings.videoFitMode == Settings.VideoFitMode.FILL) {
                 AppLog.i("FORCED SCALE: Setting fixed size to ${width}x$height")
                 holder.setFixedSize(width, height)
+            } else {
+                // CONTAIN/COVER: the LayoutParams size set by ProjectionViewScaler (getAdjustedWidth/
+                // Height or getCoverWidth/Height) IS the deliberate final pixel size - adopt it as
+                // the buffer size directly rather than stretching from native.
+                holder.setSizeFromLayout()
             }
         } else {
             holder.setSizeFromLayout()
@@ -94,6 +98,10 @@ class ProjectionView @JvmOverloads constructor(
     // A plain SurfaceView is composited directly by SurfaceFlinger, so there is no
     // per-frame draw callback we can observe. Report "unsupported" so the projection
     // watchdog skips display-stall recovery for this backend (issue #650).
+    //
+    // This is also why this backend logs no displayed-frame rate while the other two do: there is
+    // nothing to count. The decoder's `presented=` throughput field is the substitute - it counts
+    // the buffers the surface actually keeps rather than the ones handed to it.
     override fun lastFrameDrawnMs(): Long = -1L
 
     override fun longFrameEvents(): Long = 0L

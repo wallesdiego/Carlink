@@ -15,13 +15,17 @@ import android.widget.TextView
 import android.widget.ViewFlipper
 import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.R
+import com.andrerinas.openheadunit.aap.VehicleTypePolicy
 import com.andrerinas.openheadunit.app.BaseActivity
-import com.andrerinas.openheadunit.decoder.VideoDecoder
+import com.andrerinas.openheadunit.decoder.video.VideoDecoder
 import com.andrerinas.openheadunit.utils.AppPermissions
+import com.andrerinas.openheadunit.utils.AudioStreamTester
 import com.andrerinas.openheadunit.utils.AppThemeManager
 import com.andrerinas.openheadunit.utils.LocaleHelper
 import com.andrerinas.openheadunit.utils.PermissionRowBinder
 import com.andrerinas.openheadunit.utils.Settings
+import com.andrerinas.openheadunit.utils.AnnouncedDensityPolicy
+import com.andrerinas.openheadunit.utils.OnboardingDisplayPolicy
 import com.andrerinas.openheadunit.utils.SystemOptimizer
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
@@ -33,7 +37,6 @@ import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
-import kotlin.math.sqrt
 
 /**
  * Intelligent, device-aware first-run wizard. Replaces the old
@@ -43,7 +46,7 @@ import kotlin.math.sqrt
  * is older than CURRENT_ONBOARDING_VERSION, and re-launchable from Settings.
  *
  * Steps: Welcome(+language) / Safety(mandatory) / Connection / Display scan /
- * Appearance / Automation / Location / Ready.
+ * Appearance / Audio streams / Automation / Location / Ready.
  *
  * Every step reuses the real settings and their strings, and deep-links into the
  * full settings sub-screens for advanced configuration.
@@ -98,18 +101,14 @@ class OnboardingActivity : BaseActivity() {
         stepper = findViewById(R.id.onb_stepper)
 
         selectedPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-        selectedSize = estimateSizePreset()
+        selectedSize = OnboardingDisplayPolicy.initialPreset(settings.displaySizePreset, estimateSizePreset())
 
-        if (settings.connectionModes.isEmpty()) {
-            settings.connectionModes = setOf(Settings.ConnectionMode.WIFI, Settings.ConnectionMode.USB)
-        }
         buildStepperDots()
         bindSteps()
         bindPermissionsStep()
 
         // Ready step: optional-extras card. Each row finishes the wizard and jumps straight into
         // that Settings sub-screen (things the wizard does not already walk you through).
-        findViewById<View>(R.id.onb_extra_loading).visibility = View.GONE
         findViewById<View>(R.id.onb_extra_loading).setOnClickListener {
             finishOnboardingInto(R.id.loadingScreenFragment)
         }
@@ -153,7 +152,7 @@ class OnboardingActivity : BaseActivity() {
      * separate phone, so it is hidden there.
      */
     private fun isStepHidden(s: Int): Boolean =
-        s in setOf(STEP_CONNECTION, STEP_DISPLAY, STEP_DPI, 5, STEP_AUTOMATION, STEP_GPS, STEP_VEHICLE)
+        s == STEP_GPS && !settings.showsExternalGps()
 
     /** The steps actually shown, in order, after removing the ones that do not apply. */
     private fun visibleSteps(): List<Int> = (0 until STEP_COUNT).filter { !isStepHidden(it) }
@@ -181,7 +180,10 @@ class OnboardingActivity : BaseActivity() {
             val dot = View(this)
             val h = (5 * resources.displayMetrics.density).toInt()
             val lp = LinearLayout.LayoutParams(h, h)
-            lp.marginEnd = (6 * resources.displayMetrics.density).toInt()
+            androidx.core.view.MarginLayoutParamsCompat.setMarginEnd(
+                lp,
+                (6 * resources.displayMetrics.density).toInt()
+            )
             dot.layoutParams = lp
             stepper.addView(dot)
         }
@@ -261,17 +263,19 @@ class OnboardingActivity : BaseActivity() {
                 R.id.onb_size_large -> SystemOptimizer.DisplaySizePreset.LARGE_11_PLUS
                 else -> SystemOptimizer.DisplaySizePreset.STANDARD_9_10
             }
+            followSizeWithPicker()
         }
         val orientGroup = findViewById<MaterialButtonToggleGroup>(R.id.onb_orient_group)
         orientGroup.check(if (selectedPortrait) R.id.onb_orient_port else R.id.onb_orient_land)
         orientGroup.addOnButtonCheckedListener { _, id, checked ->
             if (!checked) return@addOnButtonCheckedListener
             selectedPortrait = id == R.id.onb_orient_port
+            followSizeWithPicker()
         }
 
         // Graphical DPI picker (slider + preview + Small/Medium/Large tabs, all synced).
-        // Seed from the user's saved DPI when they already set one, so re-running the wizard
-        // does not overwrite their choice; the recommended value is shown as a hint instead.
+        // Seed from the user's saved DPI when they already set one. A size tap re-seeds it
+        // unless the picker was moved by hand (followSizeWithPicker).
         dpiPicker = findViewById<com.andrerinas.openheadunit.view.DpiPickerView>(R.id.onb_dpi_picker).apply {
             val m = realMetrics()
             setPanelResolution(m.widthPixels, m.heightPixels)
@@ -314,6 +318,9 @@ class OnboardingActivity : BaseActivity() {
                 Settings.syncAutoStartOnWifiToDeviceStorage(this@OnboardingActivity, v)
             }
         }
+        // --- Audio streams: which system stream each Android Auto channel plays on ---
+        bindAudioStep()
+
         // --- Location: this device's GPS vs the connected phone's GPS ---
         val gpsGroup = findViewById<MaterialButtonToggleGroup>(R.id.onb_gps_group)
         isBinding = true
@@ -326,6 +333,86 @@ class OnboardingActivity : BaseActivity() {
 
         // --- Car brand: the display name sent to Android Auto, and the manufacturer with it ---
         bindVehicleStep()
+    }
+
+    /**
+     * Binds the audio-stream step: the separate-streams switch plus one picker per channel, each
+     * with a speaker button that plays a tone on the stream currently chosen.
+     *
+     * The tone is what makes this worth a wizard step: which stream a head unit's amplifier
+     * actually unmutes for is not knowable in advance, and finding out after the first drive is
+     * how people conclude the app has no sound.
+     */
+    private fun bindAudioStep() {
+        findViewById<SwitchMaterial>(R.id.onb_audio_separate_switch).apply {
+            isChecked = settings.separateAudioStreams
+            setOnCheckedChangeListener { _, checked ->
+                settings.separateAudioStreams = checked
+                applyAudioStepVisibility()
+            }
+        }
+
+        bindAudioStreamRow(
+            R.id.onb_audio_media_button, R.id.onb_audio_media_test,
+            { mediaPickerTitle() },
+            { settings.mediaAudioStream }, { settings.mediaAudioStream = it }
+        )
+        bindAudioStreamRow(
+            R.id.onb_audio_guidance_button, R.id.onb_audio_guidance_test,
+            { getString(R.string.audio_channel_guidance) },
+            { settings.guidanceAudioStream }, { settings.guidanceAudioStream = it }
+        )
+        bindAudioStreamRow(
+            R.id.onb_audio_system_button, R.id.onb_audio_system_test,
+            { getString(R.string.audio_channel_system) },
+            { settings.systemAudioStream }, { settings.systemAudioStream = it }
+        )
+
+        applyAudioStepVisibility()
+    }
+
+    private fun bindAudioStreamRow(
+        buttonId: Int,
+        testId: Int,
+        title: () -> String,
+        get: () -> Int,
+        set: (Int) -> Unit
+    ) {
+        val button = findViewById<MaterialButton>(buttonId)
+        button.text = AudioStreamTester.label(this, get())
+        button.setOnClickListener {
+            val labels = AudioStreamTester.labels(this)
+            MaterialAlertDialogBuilder(this, R.style.DarkAlertDialog)
+                .setTitle(getString(R.string.audio_stream_pick_title, title()))
+                .setSingleChoiceItems(labels, AudioStreamTester.indexOf(this, get())) { dialog, which ->
+                    set(AudioStreamTester.streamAt(this, which))
+                    button.text = AudioStreamTester.label(this, get())
+                    dialog.dismiss()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+        findViewById<MaterialButton>(testId).setOnClickListener {
+            AudioStreamTester.play(this, get())
+        }
+    }
+
+    /** The picker title for the first row, which covers every channel while streams are shared. */
+    private fun mediaPickerTitle(): String = getString(
+        if (settings.separateAudioStreams) R.string.audio_channel_media
+        else R.string.audio_channel_all_short
+    )
+
+    /** With separate streams off every channel plays on the media stream, so hide the other two
+     *  and widen the heading above the one that remains to name all of them. */
+    private fun applyAudioStepVisibility() {
+        val separate = settings.separateAudioStreams
+        val vis = if (separate) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.onb_audio_guidance_row).visibility = vis
+        findViewById<View>(R.id.onb_audio_system_row).visibility = vis
+        findViewById<TextView>(R.id.onb_audio_media_label).setText(
+            if (separate) R.string.audio_channel_media else R.string.audio_channel_all
+        )
     }
 
     /**
@@ -349,6 +436,12 @@ class OnboardingActivity : BaseActivity() {
             settings.rightHandDrive = checked
             applyWheelSide(checked)
         }
+
+        findViewById<MaterialButtonToggleGroup>(R.id.onb_vehicle_type_group).apply {
+            check(vehicleTypeButtonId(settings.vehicleType))
+            addOnButtonCheckedListener { _, _, checked -> if (checked) applyVehicleTypeNote() }
+        }
+        applyVehicleTypeNote()
 
         val current = settings.vehicleDisplayName.trim()
         // Build the brand list with the current value first ("option 1"), then the presets.
@@ -409,6 +502,25 @@ class OnboardingActivity : BaseActivity() {
         })
     }
 
+    /** Shown only when the microphone setting replaces the picked type with a motorcycle. */
+    private fun applyVehicleTypeNote() {
+        val picked = vehicleTypeOf(findViewById<MaterialButtonToggleGroup>(R.id.onb_vehicle_type_group).checkedButtonId)
+        findViewById<View>(R.id.onb_vehicle_type_forced).visibility =
+            if (VehicleTypePolicy.isOverriddenByMicrophone(picked, settings.useHeadUnitMicrophone)) View.VISIBLE else View.GONE
+    }
+
+    private fun vehicleTypeButtonId(type: Int): Int = when (VehicleTypePolicy.sanitised(type)) {
+        VehicleTypePolicy.TRUCK -> R.id.onb_vehicle_type_truck
+        VehicleTypePolicy.MOTORCYCLE -> R.id.onb_vehicle_type_motorcycle
+        else -> R.id.onb_vehicle_type_car
+    }
+
+    private fun vehicleTypeOf(buttonId: Int): Int = when (buttonId) {
+        R.id.onb_vehicle_type_truck -> VehicleTypePolicy.TRUCK
+        R.id.onb_vehicle_type_motorcycle -> VehicleTypePolicy.MOTORCYCLE
+        else -> VehicleTypePolicy.CAR
+    }
+
     private fun render() {
         flipper.displayedChild = step
         backBtn.visibility = if (step == 0) View.INVISIBLE else View.VISIBLE
@@ -421,8 +533,10 @@ class OnboardingActivity : BaseActivity() {
             else -> true
         }
         if (step == STEP_READY) findViewById<TextView>(R.id.onb_ready_summary).text = summaryText()
+        if (step == STEP_AUDIO) applyAudioStepVisibility()
         if (step == STEP_AUTOMATION) applyAutomationVisibility()
         if (step == STEP_PERMISSIONS) permissionBinder?.rebind()
+        if (step == STEP_VEHICLE) applyVehicleTypeNote()
         if (step == STEP_DPI) {
             findViewById<TextView>(R.id.onb_dpi_recommended).text =
                 getString(R.string.onb_dpi_recommended, recommendedDpi())
@@ -475,6 +589,8 @@ class OnboardingActivity : BaseActivity() {
                 settings.vehicleMake = make
                 settings.headUnitMake = make
             }
+            val type = vehicleTypeOf(findViewById<MaterialButtonToggleGroup>(R.id.onb_vehicle_type_group).checkedButtonId)
+            if (type != settings.vehicleType) settings.vehicleType = type
         }
         if (step == STEP_COUNT - 1) finishOnboarding() else goForward()
     }
@@ -491,6 +607,7 @@ class OnboardingActivity : BaseActivity() {
             return
         }
         deferredThisSession = true
+        settings.onboardingVersion = CURRENT_ONBOARDING_VERSION
         settings.commit()
         finish()
     }
@@ -581,17 +698,17 @@ class OnboardingActivity : BaseActivity() {
         return metrics
     }
 
-    /** Estimate the physical diagonal from real pixels and physical DPI, pick the closest preset. */
     private fun estimateSizePreset(): SystemOptimizer.DisplaySizePreset {
         val m = realMetrics()
-        val xdpi = if (m.xdpi > 40f) m.xdpi else m.densityDpi.toFloat()
-        val ydpi = if (m.ydpi > 40f) m.ydpi else m.densityDpi.toFloat()
-        val wIn = m.widthPixels / xdpi
-        val hIn = m.heightPixels / ydpi
-        val diagonal = sqrt(wIn * wIn + hIn * hIn)
-        return SystemOptimizer.DisplaySizePreset.values().minByOrNull {
-            kotlin.math.abs(it.diagonalInch - diagonal)
-        } ?: SystemOptimizer.DisplaySizePreset.STANDARD_9_10
+        return OnboardingDisplayPolicy.estimatePreset(m.widthPixels, m.heightPixels, m.xdpi, m.ydpi, m.densityDpi)
+    }
+
+    /** The size and orientation only reach the saved DPI through the picker, so move it with them. */
+    private fun followSizeWithPicker() {
+        val picker = dpiPicker ?: return
+        picker.dpi = OnboardingDisplayPolicy.pickerDpiAfterSizeChange(
+            recommendedDpi(), picker.dpi, picker.hasUserInteracted
+        )
     }
 
     private fun sizeButtonId(preset: SystemOptimizer.DisplaySizePreset): Int = when (preset) {
@@ -608,8 +725,20 @@ class OnboardingActivity : BaseActivity() {
         return getString(R.string.onb_display_detected, m.widthPixels, m.heightPixels, m.densityDpi, codec)
     }
 
-    private fun recommendedDpi(): Int =
-        SystemOptimizer(this).calculateOptimalSettings(selectedSize, selectedPortrait).recommendedDpi
+    /** What Automatic will send for the stored resolution, after the margins, as connect decides it. */
+    private fun recommendedDpi(): Int {
+        val m = realMetrics()
+        val chosen = Settings.Resolution.fromId(settings.resolutionId)
+        val r = if (chosen == null || chosen == Settings.Resolution.AUTO) {
+            SystemOptimizer.recommendedResolution(m.widthPixels, m.heightPixels)
+        } else chosen
+        val (pw, ph) = AnnouncedDensityPolicy.orientPanel(m.widthPixels, m.heightPixels, selectedPortrait)
+        val (w, h) = AnnouncedDensityPolicy.visibleSize(settings.videoFitMode, pw, ph, r.width, r.height)
+        val par = AnnouncedDensityPolicy.pixelAspectE4(
+            settings.videoFitMode, pw, ph, r.width, r.height, settings.pixelAspectRatioE4
+        )
+        return AnnouncedDensityPolicy.decide(0, selectedSize, w, h, par).announced
+    }
 
     /** Warn (in red) when the current resolution is higher than the panel: the DPI is computed for
      * the capped resolution the device actually projects (issue #767). Relevant mainly for
@@ -660,7 +789,10 @@ class OnboardingActivity : BaseActivity() {
         // Next is a button, so it never takes focus off the DPI field; without this a value the
         // user typed and did not confirm would be dropped in favour of the previous one.
         dpiPicker?.commitPendingInput()
-        settings.dpiPixelDensity = dpiPicker?.dpi ?: result.recommendedDpi
+        val stored = settings.dpiPixelDensity
+        val dpi = dpiPicker?.let { OnboardingDisplayPolicy.dpiToSave(it.dpi, it.hasUserInteracted, stored) } ?: stored
+        if (dpi != stored) settings.dpiPixelDensity = dpi
+        if (settings.displaySizePreset != selectedSize.name) settings.displaySizePreset = selectedSize.name
         settings.commit()
         updateDpiOverPanelWarning()
     }
@@ -741,16 +873,17 @@ class OnboardingActivity : BaseActivity() {
         @Volatile
         var deferredThisSession = false
         private const val KEY_STEP = "onb_step"
-        private const val STEP_COUNT = 11
+        private const val STEP_COUNT = 12
         private const val STEP_SAFETY = 1
         private const val STEP_CONNECTION = 2
         private const val STEP_DISPLAY = 3
         private const val STEP_DPI = 4
-        private const val STEP_AUTOMATION = 6
-        private const val STEP_GPS = 7
-        private const val STEP_VEHICLE = 8
-        private const val STEP_PERMISSIONS = 9
-        private const val STEP_READY = 10
+        private const val STEP_AUDIO = 6
+        private const val STEP_AUTOMATION = 7
+        private const val STEP_GPS = 8
+        private const val STEP_VEHICLE = 9
+        private const val STEP_PERMISSIONS = 10
+        private const val STEP_READY = 11
 
         // The manufacturer half of the Desktop Head Unit identity we report by default.
         private const val DHU_MAKE = "Google"

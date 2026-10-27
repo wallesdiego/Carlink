@@ -7,14 +7,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!-- Custom Home Screen Background Image -->
+    <ImageView
+        android:id="@+id/custom_home_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/wifi_direct_info"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="16dp"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="4dp"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:background="@drawable/bg_pill_translucent"
         android:textColor="@color/text_primary"
         android:textSize="12sp"
@@ -31,6 +41,61 @@
         app:navGraph="@navigation/nav_graph"
         app:defaultNavHost="true" />
 
+    <!-- Why the last connection attempt failed, and what fixes it.
+
+         Here rather than in fragment_home.xml because the home screen has two layout variants
+         (a ConstraintLayout chain and a portrait LinearLayout grid) and this needs to look the
+         same on both. Declared after main_content so it draws over the fragment, and offset far
+         enough down to clear the wifi_direct_info pill above it, which is visible in Helper mode.
+
+         Gone unless MainActivity has something certain to say. See ConnectionIssueBannerPolicy. -->
+    <LinearLayout
+        android:id="@+id/connection_issue_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginTop="52dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="horizontal"
+        android:background="@drawable/bg_warning_banner"
+        android:padding="14dp"
+        android:gravity="center_vertical"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="10dp"
+            app:srcCompat="@drawable/ic_warning_white"
+            app:tint="@color/warning_banner_icon"
+            android:importantForAccessibility="no" />
+
+        <TextView
+            android:id="@+id/connection_issue_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="13sp"
+            android:lineSpacingExtra="2dp"
+            tools:text="Your phone connected over Bluetooth, but nothing this unit sent ever reached it." />
+
+        <ImageButton
+            android:id="@+id/connection_issue_dismiss"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            app:srcCompat="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="?android:attr/textColorSecondary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/connection_issue_banner_dismiss" />
+
+    </LinearLayout>
+
     <!-- Auto-connect loading overlay: covers the home screen during automatic
          connection attempts (auto-connect last session / single USB / self mode
          / USB auto-attach). Uses the same media as AapProjectionActivity for a
@@ -39,7 +104,7 @@
         android:id="@+id/auto_connect_loading_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000"
+        android:background="@android:color/black"
         android:clickable="true"
         android:focusable="true"
         android:visibility="gone">
@@ -125,8 +190,10 @@
             android:layout_gravity="top|end"
             android:layout_marginTop="16dp"
             android:layout_marginEnd="16dp"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             android:background="@drawable/bg_pill_translucent"
             android:clickable="true"
             android:focusable="true"
@@ -137,19 +204,21 @@
 
     </FrameLayout>
 
-    <!-- Auto-connect status pill: non-blocking indicator shown during
-         automatic background connection attempts. Anchored to bottom-center
-         to avoid overlapping with the top wifi_direct_info pill and the
-         bottom-right Exit button. Home buttons remain tappable; user can
-         tap the pill to cancel. -->
+    <!-- Bring-up status pill: up whenever the connection stack is armed, second line naming the
+         step, third line the WiFi Direct channel (once toasts, which drew over this pill).
+         Anchored to bottom-center to clear the top wifi_direct_info pill and the bottom-right
+         Exit button. Home buttons remain tappable; the X stops the bring-up and a tap on the
+         pill's body does nothing. -->
     <LinearLayout
         android:id="@+id/auto_connect_pill"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="16dp"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="6dp"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
         android:background="@drawable/bg_pill_translucent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -159,20 +228,61 @@
         tools:visibility="visible">
 
         <ProgressBar
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:indeterminate="true"
             android:indeterminateTint="@android:color/white" />
 
-        <TextView
-            android:id="@+id/auto_connect_pill_text"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="@string/android_auto_starting"
-            android:textColor="@color/text_primary"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="11dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/auto_connect_pill_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/android_auto_starting"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/auto_connect_pill_stage_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:alpha="0.8"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="Creating the WiFi network"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/auto_connect_pill_network_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:alpha="0.8"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="WiFi Direct on 5 GHz (5805 MHz)"
+                tools:visibility="visible" />
+
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/auto_connect_pill_cancel"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="11dp"
+            app:srcCompat="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="@color/text_primary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/auto_connect_pill_cancel" />
 
     </LinearLayout>
 
@@ -181,7 +291,7 @@
         android:id="@+id/splash_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/da_background"
+        android:background="@color/splash_background"
         android:clickable="true"
         android:focusable="true"
         android:gravity="center">
@@ -195,25 +305,25 @@
             <ImageView
                 android:layout_width="160dp"
                 android:layout_height="160dp"
-                android:src="@drawable/ic_android_auto" />
+                android:src="@drawable/splash_logo" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="-10dp"
-                android:text="@string/da_brand"
+                android:layout_marginTop="14dp"
+                android:text="OPEN"
                 android:textColor="@color/splash_text_white"
-                android:textSize="24sp"
+                android:textSize="35sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="-4dp"
-                android:text="@string/da_wireless"
+                android:text="Headunit"
                 android:textAllCaps="true"
-                android:textColor="@color/da_accent"
-                android:textSize="24sp"
+                android:textColor="@color/splash_text_revived"
+                android:textSize="35sp"
                 android:textStyle="bold" />
 
         </LinearLayout>

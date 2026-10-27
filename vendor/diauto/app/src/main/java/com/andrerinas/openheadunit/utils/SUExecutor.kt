@@ -15,13 +15,17 @@ import rikka.shizuku.Shizuku
 class SUExecutor {
 
     private val all: Collection<SUImplementation> = buildList {
-        // libsu min sdk
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
+        // libsu requires Lollipop (API 21+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             add(RootImpl())
+        } else {
+            add(LegacySuImpl())
+        }
 
-        // Shizuku min sdk
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        // Shizuku requires Marshmallow (API 23+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             add(ShizukuImpl())
+        }
     }
 
     private var registered: Boolean = false
@@ -85,8 +89,19 @@ class SUExecutor {
             return false
         }
 
-        val exitCode = active?.runShell("setprop $key $value") ?: -1
+        val exitCode = active?.runShell("setprop $key $value", false) ?: -1
         return exitCode == 0
+    }
+
+    fun execShell(cmd: String, asRootUser: Boolean = false): Int {
+        testRegistered()
+
+        if (active == null) {
+            Log.w("SUExecutor", "#execShell failed: Not active")
+            return -1
+        }
+
+        return active?.runShell(cmd, asRootUser) ?: -1
     }
 
     private fun testRegistered() {
@@ -105,10 +120,49 @@ class SUExecutor {
 
         fun checkPermission(): Boolean
 
-        fun runShell(cmd: String): Int
+        fun runShell(cmd: String, asRootUser: Boolean): Int
+    }
+
+    private class LegacySuImpl : SUImplementation {
+        override val name = "Root (Legacy)"
+
+        override fun register() {}
+        override fun unregister() {}
+
+        override fun checkPermission(): Boolean {
+            return try {
+                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+                p.waitFor() == 0
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        override fun runShell(cmd: String, asRootUser: Boolean): Int {
+            return try {
+                val shellCmd = if (asRootUser) "su" else "sh"
+                val process = Runtime.getRuntime().exec(arrayOf(shellCmd, "-c", cmd))
+                val exitCode = process.waitFor()
+                if (exitCode != 0) {
+                    val err = process.errorStream.bufferedReader().readText()
+                    Log.e("SUExecutor", "Legacy SU #runShell failed: $err")
+                }
+                exitCode
+            } catch (e: Exception) {
+                Log.e("SUExecutor", "Legacy SU #runShell failed", e)
+                -1
+            }
+        }
     }
 
     private class RootImpl : SUImplementation {
+
+        private val rootShell by lazy {
+            Shell.Builder.create()
+                .setFlags(Shell.FLAG_MOUNT_MASTER)
+                .setTimeout(5)
+                .build()
+        }
 
         override val name = "Root"
 
@@ -125,17 +179,21 @@ class SUExecutor {
             return Shell.cmd("id").exec().isSuccess // prompt for root permission
         }
 
-        override fun runShell(cmd: String): Int {
-            return try {
-                val result = Shell.getShell()
+        override fun runShell(cmd: String, asRootUser: Boolean): Int {
+            try {
+                val shell = if (asRootUser) rootShell else Shell.getShell()
+                val result = shell
                     .newJob()
                     .add(cmd)
                     .exec()
 
-                result.code
+                if (!result.isSuccess)
+                    Log.e("SUExecutor", "#runShell failed: ${result.err}")
+
+                return result.code
             } catch (e: Exception) {
                 Log.e("SUExecutor", "#runShell failed", e)
-                -1
+                return -1
             }
         }
     }
@@ -172,7 +230,7 @@ class SUExecutor {
         override fun unregister() {
             try {
                 Shizuku.removeRequestPermissionResultListener(this)
-            } catch (e: Throwable) { }
+            } catch (_: Throwable) { }
         }
 
         override fun checkPermission(): Boolean {
@@ -187,14 +245,14 @@ class SUExecutor {
             return this.hasPermission
         }
 
-        override fun runShell(cmd: String): Int {
+        override fun runShell(cmd: String, asRootUser: Boolean): Int {
             return try {
                 if (this.connection.service == null) {
                     Log.w("SUExecutor", "#runShell failed: Shizuku service not connected")
                     return -1
                 }
 
-                this.connection.service!!.execShell(cmd)
+                this.connection.service!!.execShell(cmd, asRootUser)
             } catch (e: Exception) {
                 Log.e("SUExecutor", "#runShell failed", e)
                 -1
@@ -213,8 +271,16 @@ class SUExecutor {
 
         private class PrivilegedService : IShizuku.Stub() {
 
-            override fun execShell(command: String): Int {
-                return Runtime.getRuntime().exec(arrayOf("sh", "-c", command)).waitFor()
+            override fun execShell(command: String, asRoot: Boolean): Int {
+                val cmd = if (asRoot) "su" else "sh"
+                val process = Runtime.getRuntime().exec(arrayOf(cmd, "-c", command))
+                val errorMsg = process.errorStream.bufferedReader().readText()
+                val exitCode = process.waitFor()
+
+                if (exitCode != 0)
+                    Log.e("SUExecutor", "Shizuku execShell failed: $errorMsg")
+
+                return exitCode
             }
         }
 

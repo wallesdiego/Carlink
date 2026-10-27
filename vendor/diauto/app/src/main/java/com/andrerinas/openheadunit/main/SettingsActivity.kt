@@ -1,13 +1,16 @@
 package com.andrerinas.openheadunit.main
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.enableEdgeToEdge
 import androidx.navigation.fragment.NavHostFragment
 import android.content.res.Configuration
 import android.os.Build
+import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.R
+import com.andrerinas.openheadunit.aap.AapService
 import com.andrerinas.openheadunit.app.BaseActivity
 import com.andrerinas.openheadunit.utils.Settings
 import com.andrerinas.openheadunit.utils.SystemUI
@@ -43,7 +46,6 @@ class SettingsActivity : BaseActivity() {
         }
         requestedOrientation = appSettings.screenOrientation.androidOrientation
 
-        theme.applyStyle(R.style.ThemeOverlay_DiAutoSettings, true)
         setContentView(R.layout.activity_settings)
 
         val navHostFragment = supportFragmentManager.findFragmentById(R.id.settings_nav_host) as NavHostFragment
@@ -51,7 +53,7 @@ class SettingsActivity : BaseActivity() {
 
         // Set the start destination to settingsFragment instead of homeFragment
         val navGraph = navController.navInflater.inflate(R.navigation.nav_graph)
-        navGraph.startDestination = R.id.driveSettingsFragment
+        navGraph.startDestination = R.id.settingsFragment
         navController.graph = navGraph
 
         // Open a specific sub-screen when requested (e.g. from the onboarding wizard),
@@ -59,14 +61,52 @@ class SettingsActivity : BaseActivity() {
         val requestedDestination = intent?.getIntExtra(EXTRA_DESTINATION, 0) ?: 0
         val restoredDestination = if (requestedDestination != 0) requestedDestination
             else savedInstanceState?.getInt(KEY_CURRENT_DESTINATION, 0) ?: 0
-        if (restoredDestination != 0 && restoredDestination != R.id.driveSettingsFragment) {
+        if (restoredDestination != 0 && restoredDestination != R.id.settingsFragment) {
             try {
                 navController.navigate(restoredDestination)
             } catch (_: Exception) {}
         }
 
         val root = findViewById<View>(R.id.settings_nav_host)
-        SystemUI.apply(window, root, appSettings.fullscreenMode)
+        // Never the projection: this window has a search box and its own decor, so its content area
+        // is not the canvas the video is drawn into.
+        SystemUI.apply(window, root, appSettings.fullscreenMode, notesCanvas = false)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isVisible = true
+        AapService.instance?.onSettingsScreenVisibility(visible = true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isVisible = false
+        AapService.instance?.onSettingsScreenVisibility(visible = false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+        AapService.instance?.onSettingsScreenChanged(inForeground = true)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
+        // After the flag, never before: launchAapProjectionActivity() reads it and would otherwise
+        // swallow the raise this asks for.
+        AapService.instance?.onSettingsScreenChanged(inForeground = false)
+        if (App.provide(this).commManager.isConnected) {
+            // A broadcast, not a service start: AapService receives this one in a receiver.
+            sendBroadcast(Intent(AapService.ACTION_RAISE_PROJECTION).apply { setPackage(packageName) })
+        }
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+        currentFocus?.let { v ->
+            imm?.hideSoftInputFromWindow(v.windowToken, 0)
+        } ?: window.peekDecorView()?.let { v ->
+            imm?.hideSoftInputFromWindow(v.windowToken, 0)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -77,9 +117,32 @@ class SettingsActivity : BaseActivity() {
     }
 
     companion object {
+        /**
+         * Whether this screen is in front. Read by the Native AA wake poke, which would otherwise
+         * wake the phone and let it take the screen while the user is still changing settings.
+         * A static flag rather than a message to the service: nothing else needs to know.
+         */
+        @Volatile var isForeground = false
+
+        /**
+         * Whether this screen is on show, which a translucent activity such as the USB attach
+         * trampoline does not end. Holds every automatic USB and Self Mode start.
+         */
+        @Volatile var isVisible = false
+
         private const val KEY_CURRENT_DESTINATION = "current_nav_destination"
         // Optional destination id to open directly on launch (e.g. R.id.darkModeFragment).
         const val EXTRA_DESTINATION = "extra_destination"
+
+        /**
+         * Text to put in the settings search box on open, so a caller can land the user on one
+         * row rather than one screen.
+         *
+         * Search is used rather than a scroll because it is the only thing that overrides the
+         * Basic/Advanced filter: some rows worth pointing at are Advanced-only, and a Basic-mode
+         * user would otherwise arrive at a list that does not contain the row they were sent for.
+         */
+        const val EXTRA_SEARCH_QUERY = "extra_search_query"
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -87,7 +150,7 @@ class SettingsActivity : BaseActivity() {
         if (hasFocus) {
             val appSettings = Settings(this)
             val root = findViewById<View>(R.id.settings_nav_host)
-            SystemUI.apply(window, root, appSettings.fullscreenMode)
+            SystemUI.apply(window, root, appSettings.fullscreenMode, notesCanvas = false)
         }
     }
 }

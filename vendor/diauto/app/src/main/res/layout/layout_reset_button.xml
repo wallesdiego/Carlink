@@ -11,10 +11,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:minWidth="0dp"
-        android:minHeight="48dp"
+        android:minHeight="0dp"
         android:text="@string/reset"
         android:enabled="true"
-        android:textColor="@color/da_accent"
+        android:textColor="@android:color/white"
         app:cornerRadius="20dp"
-        app:backgroundTint="@color/da_surface" />
+        app:backgroundTint="@color/brand_teal" />
 </FrameLayout>

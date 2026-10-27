@@ -6,6 +6,9 @@ is what the in-app update popup shows.
 
 ## [Unreleased]
 
+- Android Auto now runs on the Open Headunit 3.5.0 engine, the same one that connects on head
+  units where CarLink's earlier engine did not (USB, Wi-Fi Direct and the car's hotspot). CarLink's
+  screens, settings and CarPlay are unchanged.
 - Wireless Android Auto no longer fails at once with "Wi-Fi Direct is in use by another app" when
   an idle Wi-Fi Direct group from another app or an earlier session is left on the stereo (seen on a
   Topway head unit): CarLink removes it and connects, as Open Headunit does.

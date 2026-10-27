@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.util.Log
-import com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy
+import com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.ExternalBtTransportPolicy
 import com.carlink.core.core.Engine
 import com.carlink.core.core.PhoneKind
 import com.carlink.core.detect.ExternalBluetoothProbe
@@ -136,7 +136,7 @@ class DeviceEnvironment(
         fun lastPhoneAddress(context: Context): String? = lastPhone(context).getString(KEY_LAST_PHONE, null)
 
         val ANDROID_AUTO_KEY_RECEIVERS = listOf(
-            "com.andrerinas.openheadunit.connection.CarKeyReceiver",
+            "com.andrerinas.openheadunit.connection.carkey.CarKeyBroadcastReceiver",
             "com.andrerinas.openheadunit.app.RemoteControlReceiver",
             "androidx.media.session.MediaButtonReceiver",
         )

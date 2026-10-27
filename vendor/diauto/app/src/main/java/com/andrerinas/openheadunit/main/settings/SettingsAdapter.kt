@@ -3,7 +3,7 @@ package com.andrerinas.openheadunit.main.settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CompoundButton
+import android.widget.Switch
 import android.widget.TextView
 import android.os.Build
 import androidx.annotation.StringRes
@@ -24,16 +24,34 @@ sealed class SettingItem {
         // Extra terms matched by the settings search (e.g. picker options or the
         // names of the settings inside a sub-screen). Not shown in the UI.
         val searchKeywords: String? = null,
+        val isEnabled: Boolean = true,
         val onClick: (settingId: String) -> Unit // Callback when the setting is clicked
+    ) : SettingItem()
+
+    /**
+     * A picker row with a speaker button beside it, for choosing an output stream and hearing it
+     * without leaving the screen. The test plays the value shown in the row, which is the pending
+     * choice rather than the saved one — the point is to try a stream before committing to it.
+     */
+    data class StreamSettingEntry(
+        override val stableId: String,
+        @StringRes val nameResId: Int,
+        var value: String,
+        @StringRes val descriptionResId: Int? = null,
+        val searchKeywords: String? = null,
+        val onClick: (settingId: String) -> Unit,
+        val onTest: () -> Unit
     ) : SettingItem()
 
     data class ToggleSettingEntry(
         override val stableId: String,
         @StringRes val nameResId: Int,
-        @StringRes val descriptionResId: Int,
+        @StringRes val descriptionResId: Int?,
         var isChecked: Boolean,
         val isEnabled: Boolean = true,
         val nameOverride: String? = null,
+        /** Replaces [descriptionResId] when the subtitle depends on the device, not the string. */
+        val descriptionOverride: String? = null,
         val searchKeywords: String? = null,
         val onCheckedChanged: (Boolean) -> Unit
     ) : SettingItem()
@@ -84,6 +102,7 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
         private const val VIEW_TYPE_INFO_BANNER = 5
         private const val VIEW_TYPE_ACTION_BUTTON = 6
         private const val VIEW_TYPE_SEGMENTED = 7
+        private const val VIEW_TYPE_STREAM = 8
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -95,6 +114,7 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
             is SettingItem.InfoBanner -> VIEW_TYPE_INFO_BANNER
             is SettingItem.ActionButton -> VIEW_TYPE_ACTION_BUTTON
             is SettingItem.SegmentedButtonSettingEntry -> VIEW_TYPE_SEGMENTED
+            is SettingItem.StreamSettingEntry -> VIEW_TYPE_STREAM
         }
     }
 
@@ -108,6 +128,7 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
             VIEW_TYPE_INFO_BANNER -> InfoBannerViewHolder(inflater.inflate(R.layout.layout_setting_info_banner, parent, false))
             VIEW_TYPE_ACTION_BUTTON -> ActionButtonViewHolder(inflater.inflate(R.layout.layout_setting_action_button, parent, false))
             VIEW_TYPE_SEGMENTED -> SegmentedButtonViewHolder(inflater.inflate(R.layout.layout_setting_item_segmented, parent, false))
+            VIEW_TYPE_STREAM -> StreamSettingViewHolder(inflater.inflate(R.layout.layout_setting_item_stream, parent, false))
             else -> throw IllegalArgumentException("Unknown view type: $viewType")
         }
     }
@@ -115,7 +136,7 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val item = getItem(position)
 
-        if (holder is SettingViewHolder || holder is ToggleSettingViewHolder || holder is SliderSettingViewHolder || holder is ActionButtonViewHolder || holder is SegmentedButtonViewHolder) {
+        if (holder is SettingViewHolder || holder is ToggleSettingViewHolder || holder is SliderSettingViewHolder || holder is ActionButtonViewHolder || holder is SegmentedButtonViewHolder || holder is StreamSettingViewHolder) {
             updateItemVisuals(holder.itemView, position)
         }
 
@@ -127,11 +148,24 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
             is SettingItem.InfoBanner -> (holder as InfoBannerViewHolder).bind(item)
             is SettingItem.ActionButton -> (holder as ActionButtonViewHolder).bind(item)
             is SettingItem.SegmentedButtonSettingEntry -> (holder as SegmentedButtonViewHolder).bind(item)
+            is SettingItem.StreamSettingEntry -> (holder as StreamSettingViewHolder).bind(item)
         }
     }
 
     private fun updateItemVisuals(view: View, position: Int) {
-        view.setBackgroundResource(R.drawable.da_card)
+        val prev = if (position > 0) getItem(position - 1) else null
+        val next = if (position < itemCount - 1) getItem(position + 1) else null
+
+        val isTop = prev is SettingItem.CategoryHeader || prev == null
+        val isBottom = next is SettingItem.CategoryHeader || next == null
+
+        val bgRes = when {
+            isTop && isBottom -> R.drawable.bg_setting_single
+            isTop -> R.drawable.bg_setting_top
+            isBottom -> R.drawable.bg_setting_bottom
+            else -> R.drawable.bg_setting_middle
+        }
+        view.setBackgroundResource(bgRes)
     }
 
     // --- ViewHolder implementations ---
@@ -146,24 +180,59 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
     class SettingViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val settingName: TextView = itemView.findViewById(R.id.settingName)
         private val settingValue: TextView = itemView.findViewById(R.id.settingValue)
-        
+
         fun bind(setting: SettingItem.SettingEntry) {
             if (setting.nameOverride != null) settingName.text = setting.nameOverride
             else settingName.setText(setting.nameResId)
             settingValue.text = setting.value
+            itemView.alpha = if (setting.isEnabled) 1.0f else 0.5f
+            itemView.isClickable = setting.isEnabled
+            itemView.setOnClickListener { if (setting.isEnabled) setting.onClick(setting.stableId) }
+        }
+    }
+
+    class StreamSettingViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val settingName: TextView = itemView.findViewById(R.id.settingName)
+        private val settingValue: TextView = itemView.findViewById(R.id.settingValue)
+        private val settingDescription: TextView = itemView.findViewById(R.id.settingDescription)
+        private val testButton: com.google.android.material.button.MaterialButton =
+            itemView.findViewById(R.id.settingTestButton)
+
+        fun bind(setting: SettingItem.StreamSettingEntry) {
+            settingName.setText(setting.nameResId)
+            settingValue.text = setting.value
+            // Both branches set the visibility, because the holder is recycled.
+            if (setting.descriptionResId != null) {
+                settingDescription.setText(setting.descriptionResId)
+                settingDescription.visibility = View.VISIBLE
+            } else {
+                settingDescription.visibility = View.GONE
+            }
             itemView.setOnClickListener { setting.onClick(setting.stableId) }
+            testButton.setOnClickListener { setting.onTest() }
         }
     }
 
     class ToggleSettingViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val settingName: TextView = itemView.findViewById(R.id.settingName)
         private val settingDescription: TextView = itemView.findViewById(R.id.settingDescription)
-        private val settingSwitch: CompoundButton = itemView.findViewById(R.id.settingSwitch)
+        private val settingSwitch: Switch = itemView.findViewById(R.id.settingSwitch)
 
         fun bind(setting: SettingItem.ToggleSettingEntry) {
             if (setting.nameOverride != null) settingName.text = setting.nameOverride
             else settingName.setText(setting.nameResId)
-            settingDescription.setText(setting.descriptionResId)
+            // Both branches set the visibility, because the holder is recycled. Hiding the view
+            // without ever showing it again meant that once a toggle with no description had been
+            // bound here, every later toggle reusing this holder rendered without its subtitle.
+            if (setting.descriptionOverride != null) {
+                settingDescription.text = setting.descriptionOverride
+                settingDescription.visibility = View.VISIBLE
+            } else if (setting.descriptionResId != null) {
+                settingDescription.setText(setting.descriptionResId)
+                settingDescription.visibility = View.VISIBLE
+            } else {
+                settingDescription.visibility = View.GONE
+            }
             settingSwitch.setOnCheckedChangeListener(null)
             settingSwitch.isChecked = setting.isChecked
             settingSwitch.isEnabled = setting.isEnabled
@@ -203,21 +272,29 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
         fun bind(setting: SettingItem.SliderSettingEntry) {
             settingName.setText(setting.nameResId)
             settingValue.text = setting.value
-            
-            // SeekBar works with integers 0 to max. 
+
+            // SeekBar works with integers 0 to max.
             // We map the float range [valueFrom, valueTo] to [0, 1000] for precision if needed,
             // but for desaturation 0-100 is enough.
             val range = setting.valueTo - setting.valueFrom
-            val steps = if (range > 0) 100 else 1 
-            
+            val steps = if (range > 0) 100 else 1
+
             settingSlider.max = steps
             val progress = (((setting.sliderValue - setting.valueFrom) / range) * steps).toInt()
             settingSlider.progress = progress
-            
+
             settingSlider.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         val newValue = setting.valueFrom + (progress.toFloat() / steps) * range
+                        val intVal = newValue.toInt()
+                        val suffix = when {
+                            setting.value.endsWith("%") -> "%"
+                            setting.value.endsWith("dp") -> "dp"
+                            setting.value.endsWith("s") -> "s"
+                            else -> ""
+                        }
+                        settingValue.text = "$intVal$suffix"
                         setting.onValueChanged(newValue)
                     }
                 }
@@ -235,10 +312,10 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
 
         fun bind(setting: SettingItem.SegmentedButtonSettingEntry) {
             settingName.setText(setting.nameResId)
-            
+
             val buttons = listOf(btn1, btn2, btn3)
             val visibleButtons = buttons.filterIndexed { index, _ -> index < setting.options.size }
-            
+
             buttons.forEachIndexed { index, button ->
                 if (index < setting.options.size) {
                     button.text = setting.options[index]
@@ -250,7 +327,7 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
 
             // Fixed 16dp radius like cards/save button
             val radius = 16f * itemView.resources.displayMetrics.density
-            
+
             visibleButtons.forEachIndexed { index, button ->
                 val shapeModel = when (index) {
                     0 -> com.google.android.material.shape.ShapeAppearanceModel.builder()
@@ -266,30 +343,30 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
                         .build()
                 }
                 button.shapeAppearanceModel = shapeModel
-                
+
                 // Manual selection state handling
                 val isSelected = index == setting.selectedIndex
                 button.isChecked = isSelected
-                
+
                 // Bring active button to front so its 2dp border wins the overlap
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     button.elevation = if (isSelected) 2f else 0f
                     button.stateListAnimator = null // Disable default elevation animations
                 }
-                
+
                 // Ensure stroke is 2dp and themed
                 button.strokeWidth = (2 * itemView.resources.displayMetrics.density).toInt()
-                
+
                 button.setOnClickListener {
                     if (index != setting.selectedIndex) {
                         // Instant UI feedback: uncheck all, check this one
-                        visibleButtons.forEach { 
-                            it.isChecked = false 
+                        visibleButtons.forEach {
+                            it.isChecked = false
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) it.elevation = 0f
                         }
                         button.isChecked = true
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) button.elevation = 2f
-                        
+
                         setting.onOptionSelected(index)
                     }
                 }
@@ -306,9 +383,9 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
         override fun areContentsTheSame(oldItem: SettingItem, newItem: SettingItem): Boolean {
             return when {
                 oldItem is SettingItem.SettingEntry && newItem is SettingItem.SettingEntry ->
-                    oldItem.nameResId == newItem.nameResId && oldItem.value == newItem.value
+                    oldItem.nameResId == newItem.nameResId && oldItem.value == newItem.value && oldItem.isEnabled == newItem.isEnabled
                 oldItem is SettingItem.ToggleSettingEntry && newItem is SettingItem.ToggleSettingEntry ->
-                    oldItem.nameResId == newItem.nameResId && oldItem.descriptionResId == newItem.descriptionResId && oldItem.isChecked == newItem.isChecked && oldItem.isEnabled == newItem.isEnabled && oldItem.nameOverride == newItem.nameOverride
+                    oldItem.nameResId == newItem.nameResId && oldItem.descriptionResId == newItem.descriptionResId && oldItem.isChecked == newItem.isChecked && oldItem.isEnabled == newItem.isEnabled && oldItem.nameOverride == newItem.nameOverride && oldItem.descriptionOverride == newItem.descriptionOverride
                 oldItem is SettingItem.SliderSettingEntry && newItem is SettingItem.SliderSettingEntry ->
                     oldItem.nameResId == newItem.nameResId && oldItem.value == newItem.value && oldItem.sliderValue == newItem.sliderValue
                 oldItem is SettingItem.CategoryHeader && newItem is SettingItem.CategoryHeader ->
@@ -317,6 +394,9 @@ class SettingsAdapter : ListAdapter<SettingItem, RecyclerView.ViewHolder>(Settin
                     oldItem.textResId == newItem.textResId && oldItem.text == newItem.text
                 oldItem is SettingItem.ActionButton && newItem is SettingItem.ActionButton ->
                     oldItem.textResId == newItem.textResId && oldItem.isEnabled == newItem.isEnabled
+                oldItem is SettingItem.StreamSettingEntry && newItem is SettingItem.StreamSettingEntry ->
+                    oldItem.nameResId == newItem.nameResId && oldItem.value == newItem.value &&
+                        oldItem.descriptionResId == newItem.descriptionResId
                 oldItem is SettingItem.SegmentedButtonSettingEntry && newItem is SettingItem.SegmentedButtonSettingEntry ->
                     oldItem.nameResId == newItem.nameResId && oldItem.options == newItem.options && oldItem.selectedIndex == newItem.selectedIndex
                 else -> false

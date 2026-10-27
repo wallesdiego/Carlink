@@ -13,9 +13,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.andrerinas.openheadunit.App
 import com.andrerinas.openheadunit.R
+import com.andrerinas.openheadunit.aap.VehicleTypePolicy
 import com.andrerinas.openheadunit.main.settings.SettingItem
 import com.andrerinas.openheadunit.main.settings.SettingsAdapter
 import com.andrerinas.openheadunit.utils.Settings
+import com.andrerinas.openheadunit.utils.ToastUtils
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -32,6 +34,7 @@ class VehicleInfoFragment : Fragment() {
     private var pendingVehicleModel: String? = null
     private var pendingVehicleYear: String? = null
     private var pendingVehicleId: String? = null
+    private var pendingVehicleType: Int? = null
     private var pendingRightHandDrive: Boolean? = null
     private var pendingHeadUnitMake: String? = null
     private var pendingHeadUnitModel: String? = null
@@ -53,6 +56,7 @@ class VehicleInfoFragment : Fragment() {
         pendingVehicleModel = settings.vehicleModel
         pendingVehicleYear = settings.vehicleYear
         pendingVehicleId = settings.vehicleId
+        pendingVehicleType = settings.vehicleType
         pendingRightHandDrive = settings.rightHandDrive
         pendingHeadUnitMake = settings.headUnitMake
         pendingHeadUnitModel = settings.headUnitModel
@@ -122,19 +126,20 @@ class VehicleInfoFragment : Fragment() {
     }
 
     private fun saveSettings() {
-        pendingVehicleDisplayName?.let { settings.vehicleDisplayName = it }
-        pendingVehicleMake?.let { settings.vehicleMake = it }
-        pendingVehicleModel?.let { settings.vehicleModel = it }
-        pendingVehicleYear?.let { settings.vehicleYear = it }
-        pendingVehicleId?.let { settings.vehicleId = it }
-        pendingRightHandDrive?.let { settings.rightHandDrive = it }
-        pendingHeadUnitMake?.let { settings.headUnitMake = it }
-        pendingHeadUnitModel?.let { settings.headUnitModel = it }
+        pendingVehicleDisplayName?.let { if (it != settings.vehicleDisplayName) settings.vehicleDisplayName = it }
+        pendingVehicleMake?.let { if (it != settings.vehicleMake) settings.vehicleMake = it }
+        pendingVehicleModel?.let { if (it != settings.vehicleModel) settings.vehicleModel = it }
+        pendingVehicleYear?.let { if (it != settings.vehicleYear) settings.vehicleYear = it }
+        pendingVehicleId?.let { if (it != settings.vehicleId) settings.vehicleId = it }
+        pendingVehicleType?.let { if (it != settings.vehicleType) settings.vehicleType = it }
+        pendingRightHandDrive?.let { if (it != settings.rightHandDrive) settings.rightHandDrive = it }
+        pendingHeadUnitMake?.let { if (it != settings.headUnitMake) settings.headUnitMake = it }
+        pendingHeadUnitModel?.let { if (it != settings.headUnitModel) settings.headUnitModel = it }
 
         hasChanges = false
         updateSaveButtonState()
 
-        Toast.makeText(context, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
+        ToastUtils.showToast(context, getString(R.string.settings_saved), Toast.LENGTH_SHORT, force = true)
     }
 
     private fun checkChanges() {
@@ -143,6 +148,7 @@ class VehicleInfoFragment : Fragment() {
                 pendingVehicleModel != settings.vehicleModel ||
                 pendingVehicleYear != settings.vehicleYear ||
                 pendingVehicleId != settings.vehicleId ||
+                pendingVehicleType != settings.vehicleType ||
                 pendingRightHandDrive != settings.rightHandDrive ||
                 pendingHeadUnitMake != settings.headUnitMake ||
                 pendingHeadUnitModel != settings.headUnitModel
@@ -233,6 +239,34 @@ class VehicleInfoFragment : Fragment() {
                 }
             }
         ))
+
+        val vehicleTypeOptions = listOf(
+            getString(R.string.vehicle_type_car),
+            getString(R.string.vehicle_type_truck),
+            getString(R.string.vehicle_type_motorcycle)
+        )
+
+        items.add(SettingItem.SegmentedButtonSettingEntry(
+            stableId = "vehicleType",
+            nameResId = R.string.vehicle_type_label,
+            options = vehicleTypeOptions,
+            selectedIndex = VehicleTypePolicy.indexOf(pendingVehicleType ?: VehicleTypePolicy.CAR),
+            onOptionSelected = { index ->
+                pendingVehicleType = VehicleTypePolicy.atIndex(index)
+                checkChanges()
+                updateSettingsList()
+            }
+        ))
+
+        // The microphone setting can override the pick, so say so rather than show a choice that is
+        // not what goes on the wire.
+        if (VehicleTypePolicy.isOverriddenByMicrophone(
+                pendingVehicleType ?: VehicleTypePolicy.CAR, settings.useHeadUnitMicrophone)) {
+            items.add(SettingItem.InfoBanner(
+                stableId = "vehicleTypeForcedByMicrophone",
+                textResId = R.string.vehicle_type_forced_by_microphone
+            ))
+        }
 
         items.add(SettingItem.ToggleSettingEntry(
             stableId = "rightHandDrive",

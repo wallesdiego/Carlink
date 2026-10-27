@@ -2,7 +2,7 @@ package com.carlink.core.connection.aa
 
 import android.content.Context
 import android.os.Bundle
-import com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy
+import com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.ExternalBtTransportPolicy
 import com.carlink.core.connection.PictureChoice
 import com.carlink.core.connection.PicturePolicy
 import com.carlink.core.core.Transport
@@ -70,14 +70,19 @@ object AaSessionSettings {
             put("auto-connect-last-session", false)
             // true would finish all of CarLink's tasks, Home included (DA§10.6.5).
             put("kill-on-disconnect", false)
+            // open-headunit 3.5.0's own overlays stay off: CarLink has its floating switcher.
+            put("enable-floating-button", false)
             // The phone rejoins a network it saved (open-headunit PR #1006, DA§10.11).
             put("wifi-direct-stable-identity", true)
             put("vehicle-display-name", carName)
             // A tablet or generic head unit is no A2DP sink: true omits Android Auto's media sink
             // and leaves no music at all (DA§4.5 item 4). DiLink's own default is true (DA§12 #9).
-            put("music-via-bluetooth", when (profile) {
-                VehicleProfile.BYD_DILINK -> true
-                VehicleProfile.GENERIC -> settings.soundThroughCarBluetooth
+            // open-headunit 3.5.0 has no "music via Bluetooth" switch: the same intent is its
+            // playback-focus mode NEVER (2), which leaves the car's own Bluetooth player alone;
+            // AUTO (0) otherwise (PlaybackFocusPolicy).
+            put("playback-focus-mode", when (profile) {
+                VehicleProfile.BYD_DILINK -> 2
+                VehicleProfile.GENERIC -> if (settings.soundThroughCarBluetooth) 2 else 0
             })
             // BYD's HUD/cluster outputs only on a BYD (DA§12.2).
             put("byd-navigation-enabled", profile == VehicleProfile.BYD_DILINK && settings.bydDirections)
@@ -100,13 +105,16 @@ object AaSessionSettings {
             // CommManager.sendKey applies to every key route. CarLink owns the keymap: always written.
             put("key-codes", WheelKeys.diAutoKeyCodes(settings.wheelKeys))
             // The engine's Bluetooth route for mode 3 (design/EXTERNAL_BLUETOOTH.md); empty = Android's own.
-            put(ExternalBtTransportPolicy.HOST_ROUTE_KEY, if (transport == Transport.WIRELESS) moduleRoute?.name.orEmpty() else "")
+            // open-headunit 3.5.0 picks the module route from its own two opt-ins.
+            val route = if (transport == Transport.WIRELESS) moduleRoute else null
+            put("external-bt-zbt-transport", route == ExternalBtTransportPolicy.Route.ZBT)
+            put("external-bt-blink-transport", route == ExternalBtTransportPolicy.Route.BLINK)
 
             // The wireless route. A USB session writes the Wi-Fi Direct route: the engine arms
             // wireless in the background of every service start (DA§2.3), and must not do so with
             // an earlier session's shared network and BSSID.
-            val route = if (transport == Transport.USB) WirelessPath.WIFI_DIRECT else path ?: WirelessPath.WIFI_DIRECT
-            when (route) {
+            val wirelessRoute = if (transport == Transport.USB) WirelessPath.WIFI_DIRECT else path ?: WirelessPath.WIFI_DIRECT
+            when (wirelessRoute) {
                 WirelessPath.WIFI_DIRECT -> {
                     put("native-ap-transport", 0)
                     put("hotspot-interface", "")

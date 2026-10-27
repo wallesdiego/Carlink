@@ -30,9 +30,10 @@
 # -keep class com.andrerinas.openheadunit.decoder.** { *; }
 
 # --- JNI ---
+-keep class com.andrerinas.openheadunit.decoder.audio.NativeAAudio { *; }
 -keep class com.andrerinas.openheadunit.aap.AapSslNative { *; }
--keep class com.andrerinas.openheadunit.decoder.FfmpegHevcDecoder { *; }
--keep class com.andrerinas.openheadunit.decoder.FfmpegHevcDecoder$Companion { *; }
+-keep class com.andrerinas.openheadunit.decoder.video.FfmpegHevcDecoder { *; }
+-keep class com.andrerinas.openheadunit.decoder.video.FfmpegHevcDecoder$Companion { *; }
 
 # --- Conscrypt Rules ---
 -dontwarn org.conscrypt.**
@@ -53,10 +54,4 @@
 # The Shizuku user service: Shizuku's server instantiates it by class name in its own process.
 -keep class com.andrerinas.openheadunit.utils.SUExecutor$ShizukuImpl$PrivilegedService {
     <init>(...);
-}
-# BydCarServerTransport reads this Parcelable from a BYD provider's Bundle: the platform finds it
-# by class name and reads CREATOR reflectively; the app never constructs it itself.
--keep class com.byd.spi.ipc.cursor.BinderCursor$BinderParcelable {
-    public static final android.os.Parcelable$Creator CREATOR;
-    public final android.os.IBinder binder;
 }

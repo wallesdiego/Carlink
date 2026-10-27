@@ -16,7 +16,7 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="?attr/actionBarSize"
             app:title="@string/settings"
             app:navigationIcon="@drawable/ic_arrow_back_white"
             app:titleTextColor="?android:attr/textColorPrimary"
@@ -46,8 +46,6 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                app:cornerRadius="16dp"
-                android:minHeight="56dp"
                 android:text="@string/settings_tab_basic" />
 
             <com.google.android.material.button.MaterialButton
@@ -56,8 +54,6 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                app:cornerRadius="16dp"
-                android:minHeight="56dp"
                 android:text="@string/settings_tab_advanced" />
 
         </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -70,11 +66,7 @@
             android:layout_marginTop="8dp"
             android:hint="@string/settings_search_hint"
             app:startIconDrawable="@drawable/ic_search"
-            app:endIconMode="clear_text"
-            app:boxCornerRadiusTopStart="16dp"
-            app:boxCornerRadiusTopEnd="16dp"
-            app:boxCornerRadiusBottomStart="16dp"
-            app:boxCornerRadiusBottomEnd="16dp">
+            app:endIconMode="clear_text">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/settingsSearch"
@@ -93,7 +85,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:padding="24dp"
+        android:padding="16dp"
         android:scrollbars="vertical"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 

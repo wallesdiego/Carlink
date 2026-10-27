@@ -17,6 +17,7 @@ import com.andrerinas.openheadunit.aap.AapService
 import com.andrerinas.openheadunit.main.settings.SettingItem
 import com.andrerinas.openheadunit.main.settings.SettingsAdapter
 import com.andrerinas.openheadunit.utils.Settings
+import com.andrerinas.openheadunit.utils.ToastUtils
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -33,6 +34,7 @@ class MicSettingsFragment : Fragment() {
     private var saveButton: MaterialButton? = null
 
     // Pending states
+    private var pendingUseHeadUnitMicrophone: Boolean? = null
     private var pendingMicSampleRate: Int? = null
     private var pendingMicInputSource: Int? = null
     private var pendingMicEchoCanceler: Boolean? = null
@@ -53,6 +55,7 @@ class MicSettingsFragment : Fragment() {
         settings = App.provide(requireContext()).settings
 
         // Initialize pending state
+        pendingUseHeadUnitMicrophone = settings.useHeadUnitMicrophone
         pendingMicSampleRate = settings.micSampleRate
         pendingMicInputSource = settings.micInputSource
         pendingMicEchoCanceler = settings.micEchoCanceler
@@ -114,15 +117,16 @@ class MicSettingsFragment : Fragment() {
     }
 
     private fun saveSettings() {
-        pendingMicSampleRate?.let { settings.micSampleRate = it }
-        pendingMicInputSource?.let { settings.micInputSource = it }
-        pendingMicEchoCanceler?.let { settings.micEchoCanceler = it }
-        pendingMicNoiseSuppressor?.let { settings.micNoiseSuppressor = it }
-        pendingMicAutoGainControl?.let { settings.micAutoGainControl = it }
+        pendingUseHeadUnitMicrophone?.let { if (it != settings.useHeadUnitMicrophone) settings.useHeadUnitMicrophone = it }
+        pendingMicSampleRate?.let { if (it != settings.micSampleRate) settings.micSampleRate = it }
+        pendingMicInputSource?.let { if (it != settings.micInputSource) settings.micInputSource = it }
+        pendingMicEchoCanceler?.let { if (it != settings.micEchoCanceler) settings.micEchoCanceler = it }
+        pendingMicNoiseSuppressor?.let { if (it != settings.micNoiseSuppressor) settings.micNoiseSuppressor = it }
+        pendingMicAutoGainControl?.let { if (it != settings.micAutoGainControl) settings.micAutoGainControl = it }
 
         if (requiresRestart) {
             if (App.provide(requireContext()).commManager.isConnected) {
-                Toast.makeText(context, getString(R.string.stopping_service), Toast.LENGTH_SHORT).show()
+                ToastUtils.showToast(context, getString(R.string.stopping_service), Toast.LENGTH_SHORT, force = true)
                 val stopServiceIntent = Intent(requireContext(), AapService::class.java).apply {
                     action = AapService.ACTION_STOP_SERVICE
                 }
@@ -133,11 +137,12 @@ class MicSettingsFragment : Fragment() {
         hasChanges = false
         requiresRestart = false
         updateSaveButtonState()
-        Toast.makeText(context, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show()
+        ToastUtils.showToast(context, getString(R.string.settings_saved), Toast.LENGTH_SHORT, force = true)
     }
 
     private fun checkChanges() {
-        val anyChange = pendingMicSampleRate != settings.micSampleRate ||
+        val anyChange = pendingUseHeadUnitMicrophone != settings.useHeadUnitMicrophone ||
+                pendingMicSampleRate != settings.micSampleRate ||
                 pendingMicInputSource != settings.micInputSource ||
                 pendingMicEchoCanceler != settings.micEchoCanceler ||
                 pendingMicNoiseSuppressor != settings.micNoiseSuppressor ||
@@ -156,7 +161,36 @@ class MicSettingsFragment : Fragment() {
 
         items.add(SettingItem.CategoryHeader("micSettings", R.string.microphone_settings))
 
-        // Mic Sample Rate
+        val micEnabled = pendingUseHeadUnitMicrophone != false
+        items.add(SettingItem.ToggleSettingEntry(
+            stableId = "useHeadUnitMicrophone",
+            nameResId = R.string.use_head_unit_microphone,
+            descriptionResId = R.string.use_head_unit_microphone_description,
+            isChecked = micEnabled,
+            onCheckedChanged = { isChecked ->
+                pendingUseHeadUnitMicrophone = isChecked
+                checkChanges()
+                updateSettingsList()
+            }
+        ))
+
+        if (micEnabled) {
+            addMicDetailRows(items)
+        } else {
+            items.add(SettingItem.InfoBanner("micOff", R.string.head_unit_microphone_off_info))
+        }
+
+        settingsAdapter.submitList(items) {
+            scrollState?.let { recyclerView.layoutManager?.onRestoreInstanceState(it) }
+        }
+    }
+
+    /** Everything that only means something while this head unit is the one recording. */
+    private fun addMicDetailRows(items: MutableList<SettingItem>) {
+        items.add(SettingItem.InfoBanner("micWireFormat", R.string.mic_wire_format_info))
+
+        // Mic capture rate. A compatibility control, not a quality one: reporters raised it hoping
+        // for better audio and got a stream the phone could not understand.
         items.add(SettingItem.SettingEntry(
             stableId = "micSampleRate",
             nameResId = R.string.mic_sample_rate,
@@ -233,8 +267,5 @@ class MicSettingsFragment : Fragment() {
             }
         ))
 
-        settingsAdapter.submitList(items) {
-            scrollState?.let { recyclerView.layoutManager?.onRestoreInstanceState(it) }
-        }
     }
 }

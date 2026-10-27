@@ -42,13 +42,15 @@ class AaSessionSettingsTest {
     }
 
     @Test fun theModuleRouteReachesTheEngineOnlyForWirelessSessions() {
-        val key = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.HOST_ROUTE_KEY
-        val blink = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.Route.BLINK
-        assertEquals("", values().values[key])
-        assertEquals("BLINK", AaSessionSettings.values(base, Transport.WIRELESS, WirelessPath.WIFI_DIRECT, VehicleProfile.GENERIC,
-            "My Car", 320, moduleRoute = blink).values[key])
-        assertEquals("", AaSessionSettings.values(base, Transport.USB, null, VehicleProfile.GENERIC,
-            "My Car", 320, moduleRoute = blink).values[key])
+        val blink = com.andrerinas.openheadunit.connection.wifi.modes.nativeaa.ExternalBtTransportPolicy.Route.BLINK
+        assertEquals(false, values().values["external-bt-blink-transport"])
+        assertEquals(false, values().values["external-bt-zbt-transport"])
+        val wireless = AaSessionSettings.values(base, Transport.WIRELESS, WirelessPath.WIFI_DIRECT, VehicleProfile.GENERIC,
+            "My Car", 320, moduleRoute = blink).values
+        assertEquals(true, wireless["external-bt-blink-transport"])
+        assertEquals(false, wireless["external-bt-zbt-transport"])
+        assertEquals(false, AaSessionSettings.values(base, Transport.USB, null, VehicleProfile.GENERIC,
+            "My Car", 320, moduleRoute = blink).values["external-bt-blink-transport"])
     }
 
     @Test fun wifiDirectClearsEveryAccessPointValue() {
@@ -95,12 +97,12 @@ class AaSessionSettingsTest {
 
     @Test fun musicAndNavigationFollowTheProfile() {
         val generic = values(settings = base.copy(bydDirections = true)).values
-        assertEquals(false, generic["music-via-bluetooth"])
+        assertEquals(0, generic["playback-focus-mode"])
         assertEquals(false, generic["byd-navigation-enabled"])
-        assertEquals(true, values(settings = base.copy(soundThroughCarBluetooth = true)).values["music-via-bluetooth"])
+        assertEquals(2, values(settings = base.copy(soundThroughCarBluetooth = true)).values["playback-focus-mode"])
 
         val byd = values(settings = base.copy(bydDirections = true), profile = VehicleProfile.BYD_DILINK).values
-        assertEquals(true, byd["music-via-bluetooth"])
+        assertEquals(2, byd["playback-focus-mode"])
         assertEquals(true, byd["byd-navigation-enabled"])
         assertEquals(false, values(settings = base.copy(bydDirections = false), profile = VehicleProfile.BYD_DILINK).values["byd-navigation-enabled"])
     }

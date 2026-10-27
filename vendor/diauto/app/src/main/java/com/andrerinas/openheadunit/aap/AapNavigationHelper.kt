@@ -36,14 +36,14 @@ class AapNavigationHelper(
         )
         var nextTurnDistance: TimedMessage<NavigationStatus.NextTurnDistanceEvent>? = null,
         var navigationState: TimedMessage<NavigationStatus.NavigationState>? = null,
-        var currentPosition: TimedMessage<NavigationStatus.NavigationCurrentPosition>? = null,
-        var currentStreet: TimedMessage<String>? = null
+        var currentPosition: TimedMessage<NavigationStatus.NavigationCurrentPosition>? = null
     )
 
     private data class FullNavigationMessage(
         val distanceMeters: Int?,
         val timeSeconds: Int?,
         val road: String,
+        val currentRoad: String,
         @Deprecated(
             message = "Legacy NextTurnDetail.NextEvent wire value; remove with NavigationUpdateIntent.nextEventType and maneuverTypeToLegacyNextEvent.",
             level = DeprecationLevel.WARNING
@@ -79,18 +79,15 @@ class AapNavigationHelper(
             turnAngle = prepared.turnAngle,
             totalDistanceMeters = prepared.totalDistanceMeters,
             totalTimeSeconds = prepared.totalTimeSeconds,
-            estimatedArrival = prepared.estimatedArrival
+            estimatedArrival = prepared.estimatedArrival,
+            currentRoad = prepared.currentRoad
         )
-        context.applicationContext.sendBroadcast(intent,
-            if (com.andrerinas.openheadunit.BuildConfig.DEBUG)
-                com.andrerinas.openheadunit.BuildConfig.APPLICATION_ID + ".permission.NAVIGATION_UPDATE"
-            else NavigationUpdateIntent.BROADCAST_PERMISSION)
+        context.applicationContext.sendBroadcast(intent, NavigationUpdateIntent.BROADCAST_PERMISSION)
     }
 
     fun showNotificationForSnapshot(snapshot: NavigationSnapshot, distanceMeters: Int?) {
         val detail = snapshot.nextTurnDetail?.payload
         val state = snapshot.navigationState?.payload
-        val currentPosition = snapshot.currentPosition?.payload
         val actionFromDetail = detail
             ?.takeIf { it.hasNextTurn() }
             ?.let { nextEventToAction(it.nextTurn) }
@@ -101,23 +98,7 @@ class AapNavigationHelper(
             ?.let { maneuverTypeToAction(it) }
         val action = actionFromDetail ?: actionFromState ?: context.getString(R.string.nav_action_unknown)
 
-        val roadFromPosition = currentPosition
-            ?.takeIf { it.hasCurrentRoad() && it.currentRoad.hasName() }
-            ?.currentRoad
-            ?.name
-            ?.takeIf { it.isNotBlank() }
-        val roadFromState = state?.stepsList?.firstOrNull()
-            ?.takeIf { it.hasRoad() && it.road.hasName() }
-            ?.road
-            ?.name
-            ?.takeIf { it.isNotBlank() }
-        val street = (
-            roadFromPosition
-                ?: snapshot.currentStreet?.payload?.takeIf { it.isNotBlank() }
-                ?: detail?.road?.takeIf { it.isNotBlank() }
-                ?: roadFromState
-                ?: ""
-            ).ifBlank { "—" }
+        val street = NavigationRoadPolicy.maneuverRoad(state, detail) ?: "—"
         showNotification(distanceMeters = distanceMeters, action = action, street = street)
     }
 
@@ -148,21 +129,8 @@ class AapNavigationHelper(
             ?.toInt()
             ?: turnDistance?.timeToTurnSeconds?.takeIf { it >= 0 }
 
-        val roadFromPosition = currentPosition
-            ?.takeIf { it.hasCurrentRoad() && it.currentRoad.hasName() }
-            ?.currentRoad
-            ?.name
-            ?.takeIf { it.isNotBlank() }
-        val roadFromState = state?.stepsList?.firstOrNull()
-            ?.takeIf { it.hasRoad() && it.road.hasName() }
-            ?.road
-            ?.name
-            ?.takeIf { it.isNotBlank() }
-        val road = (roadFromPosition
-            ?: snapshot.currentStreet?.payload?.takeIf { it.isNotBlank() }
-            ?: roadFromState
-            ?: detail?.road?.takeIf { it.isNotBlank() }
-            ?: "").ifBlank { "—" }
+        val road = NavigationRoadPolicy.maneuverRoad(state, detail).orEmpty()
+        val currentRoad = NavigationRoadPolicy.currentRoad(currentPosition).orEmpty()
 
         val maneuverType = state?.stepsList?.firstOrNull()
             ?.takeIf { it.hasManeuver() }
@@ -215,6 +183,7 @@ val actionText = state?.stepsList?.firstOrNull()?.maneuver?.type?.let { maneuver
             distanceMeters = distanceMeters,
             timeSeconds = timeSeconds,
             road = road,
+            currentRoad = currentRoad,
             nextEventType = nextEventType,
             actionText = actionText,
             turnSide = turnSide,
