@@ -1,0 +1,1713 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 8d6d9ec..0680185 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,17 @@ CarLink's releases, newest first. Versions follow `major.minor.patch`; each one
+ [GitHub](https://github.com/F-e-n-y-x/CarLink/releases) with its APK. The text under each version
+ is what the in-app update popup shows.
+ 
++## [Unreleased]
++
++- Wireless Android Auto no longer fails at once with "Wi-Fi Direct is in use by another app" when
++  an idle Wi-Fi Direct group from another app or an earlier session is left on the stereo (seen on a
++  Topway head unit): CarLink removes it and connects, as Open Headunit does.
++- Wireless Android Auto on head units whose own Bluetooth is already the phone's hands-free link:
++  when the phone does not start Android Auto by itself, CarLink now wakes it (at most twice per
++  connection) instead of waiting until it gives up. On Android 12 and older stereos with their own
++  hands-free Bluetooth, CarLink first turns the stereo's Bluetooth off and on once, so its hands-free
++  link reconnects and Android Auto starts; wireless Android Auto now waits up to 50 s for the phone.
++
+ ## [1.0.6] - 2026-10-20
+ 
+ - Faster connections: USB Android Auto in about 1.3 s (was 3.2 s), wireless Android Auto in about 3 s.
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index c773a83..084cd9e 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -121,10 +121,11 @@ android {
+         buildConfig = true
+     }
+ 
+-    // CarLink ships in English only, including the engines' own screens (they carry 20
+-    // translations). Remove this filter and extend xml/locales_config.xml to bring them back.
++    // CarLink ships in English and Brazilian Portuguese (app/src/main/res/values-pt-rBR). The
++    // engines carry 20 translations of their own screens; only these two are kept. Add a locale here
++    // and in xml/locales_config.xml, with CarLink's strings translated, to ship another.
+     androidResources {
+-        localeFilters += listOf("en")
++        localeFilters += listOf("en", "pt-rBR")
+     }
+ 
+     packaging {
+diff --git a/app/src/main/res/values-pt-rBR/carlink_engine_overrides.xml b/app/src/main/res/values-pt-rBR/carlink_engine_overrides.xml
+new file mode 100644
+index 0000000..a610553
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_engine_overrides.xml
+@@ -0,0 +1,36 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  Brazilian Portuguese for carlink_engine_overrides.xml. Needed as well as the English file: DiAuto
++  ships its own values-pt-rBR, which would win over CarLink's English values on a pt-BR device.
++-->
++<resources>
++    <!-- DiPlay: CarPlayHostActivity -->
++    <string name="diplay">CarLink</string>
++    <string name="back_to_diplay">Voltar ao CarLink</string>
++    <string name="could_not_start_carplay_return_to_diplay_and_check_app_per">Não foi possível iniciar o CarPlay. Volte ao CarLink e verifique as permissões do app.</string>
++    <string name="allow_nearby_devices_for_diplay_in_the_head_unit_s_app_per">Permita Dispositivos próximos para o CarLink nas permissões de apps da multimídia.</string>
++    <string name="allow_precise_location_for_diplay_in_the_head_unit_s_app_p">Permita a Localização precisa para o CarLink nas permissões de apps da multimídia.</string>
++    <string name="existing_wifi_instructions">Conecte a multimídia e o iPhone à mesma rede Wi-Fi externa nas configurações do sistema. Digite abaixo o nome exato e a senha WPA2; deixe a senha vazia só para uma rede aberta. Use WPA2 ou o modo misto WPA2/WPA3 e desative o isolamento de clientes no roteador. O CarLink mantém essa conexão Wi-Fi e não cria hotspot.</string>
++    <string name="open_diplay_settings_hint">Durante o CarPlay, deslize para baixo com %1$d dedos para abrir o menu do CarPlay.</string>
++    <string name="carplay_settings">Menu do CarPlay</string>
++    <string name="side_panel_full_screen">Tela cheia</string>
++    <string name="setup_error_auth">Os arquivos de autenticação do CarPlay não estão nesta versão. Configurações › Diagnóstico explica o que é necessário.</string>
++    <!-- DiPlay: dashboard map and the accessibility service shown in system settings -->
++    <string name="cluster_waiting_for_map">CarLink · aguardando o mapa do CarPlay</string>
++    <string name="wheel_key_service_label">Botões do volante do CarLink</string>
++    <string name="wheel_key_service_description">Permite que o CarLink use os botões do volante escolhidos para dar zoom no mapa do CarPlay no painel e para navegar pela tela do CarPlay. Ele só recebe os toques dos botões e não lê a tela.</string>
++
++    <!-- DiAuto: AapProjectionActivity's exit menu (two-finger swipe from the edge) and its one-time hint -->
++    <string name="exit_dialog_title">Android Auto</string>
++    <string name="exit_dialog_stop">Desconectar</string>
++    <string name="exit_dialog_background">Mover para segundo plano</string>
++    <string name="gesture_hint">Dica: deslize da borda esquerda com dois dedos para abrir o menu do Android Auto.</string>
++
++    <!-- DiAuto: AapService notifications -->
++    <string name="notification_service_running">O Android Auto está pronto</string>
++    <string name="boot_loop_paused_generic">Este aparelho reiniciou três vezes seguidas logo depois de o CarLink iniciar o Android Auto sem fio, então o modo sem fio ficou desligado desta vez. O USB continua funcionando. Abra o CarLink para ligá-lo de novo.</string>
++    <string name="boot_loop_paused_native_wifi_direct">Este aparelho reiniciou três vezes seguidas logo depois de o CarLink iniciar o Android Auto sem fio, então o modo sem fio ficou desligado desta vez. Em algumas multimídias, o chip de Wi-Fi derruba o sistema inteiro quando um celular entra numa rede Wi-Fi Direct. Tente o hotspot do carro como método sem fio. O USB continua funcionando.</string>
++
++    <!-- CarLink's entry in Android Auto's exit menu, in place of DiAuto's Quick Settings (carlink_engine_theme.xml). -->
++    <string name="carlink_engine_open_carlink">Abrir o CarLink</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings.xml b/app/src/main/res/values-pt-rBR/carlink_strings.xml
+new file mode 100644
+index 0000000..3732ccb
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Overrides both engines' app_name: the merged app is CarLink everywhere. -->
++    <string name="app_name">CarLink</string>
++
++    <string name="notification_channel_launch">Abrir o CarLink</string>
++    <string name="notification_phone_ready">%1$s está por perto. Toque para conectar.</string>
++    <string name="notification_open">Toque para abrir o CarLink.</string>
++    <!-- Android Auto engine's persistent notification channel, shown in system notification settings. -->
++    <string name="carlink_notification_channel_android_auto">Conexão do Android Auto</string>
++
++    <!-- Shared vocabulary -->
++    <string name="carlink_back">Voltar</string>
++    <string name="carlink_engine_carplay">CarPlay</string>
++    <string name="carlink_engine_android_auto">Android Auto</string>
++    <string name="carlink_transport_usb">USB</string>
++    <string name="carlink_transport_wireless">Sem fio</string>
++    <!-- How a phone reaches the screen: by cable (USB) or wirelessly (Bluetooth + Wi-Fi). -->
++    <string name="carlink_transport_cable">Cabo</string>
++    <string name="carlink_transport_usb_cable">Cabo USB</string>
++    <string name="carlink_transport_plugged_in">Conectado no cabo (USB)</string>
++    <string name="carlink_transport_with_path">%1$s · %2$s</string>
++    <string name="carlink_transport_connected_cable">Conectado por cabo</string>
++    <string name="carlink_transport_connected_wireless">Conectado sem fio</string>
++    <string name="carlink_transport_connecting_cable">Conectando por cabo</string>
++    <string name="carlink_transport_connecting_wireless">Conectando sem fio</string>
++    <string name="carlink_state_on">Ligado</string>
++    <string name="carlink_state_off">Desligado</string>
++    <string name="carlink_state_selected">Selecionado</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_dashboard.xml b/app/src/main/res/values-pt-rBR/carlink_strings_dashboard.xml
+new file mode 100644
+index 0000000..ec36784
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_dashboard.xml
+@@ -0,0 +1,207 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Home dashboard (design/RESEARCH_PREMIUM_UX.md §7.3). Brazilian Portuguese. -->
++<resources>
++    <string name="carlink_home_settings">Configurações</string>
++
++    <string name="carlink_home_eyebrow_setup">Configuração</string>
++    <string name="carlink_home_eyebrow_ready">Pronto</string>
++    <string name="carlink_home_eyebrow_connecting">Conectando</string>
++    <string name="carlink_home_eyebrow_connected">Conectado</string>
++    <string name="carlink_home_eyebrow_problem">Requer atenção</string>
++
++    <string name="carlink_home_permission_title">Uma permissão rápida</string>
++    <string name="carlink_home_permission_body">O CarLink precisa de dispositivos próximos, localização e microfone para encontrar seu celular e rodar o CarPlay ou o Android Auto.</string>
++    <string name="carlink_home_permission_action">Permitir</string>
++
++    <string name="carlink_home_bt_off_title">O Bluetooth está desligado</string>
++    <string name="carlink_home_bt_off_body">Ligue-o para conectar sem fio, ou conecte o celular com um cabo.</string>
++    <string name="carlink_home_bt_off_action">Ligar o Bluetooth</string>
++
++    <string name="carlink_home_ready_title">Conecte o cabo ou aproxime o celular</string>
++    <string name="carlink_home_ready_body">O iPhone abre o CarPlay. Celulares Android abrem o Android Auto.</string>
++    <string name="carlink_home_pair_action">Parear um celular</string>
++
++    <string name="carlink_home_ready_phone_title">Conectar %1$s?</string>
++    <string name="carlink_home_ready_phone_body">%1$s via %2$s. Conectar um cabo também funciona.</string>
++    <string name="carlink_home_connect">Conectar</string>
++    <string name="carlink_home_paused">A conexão automática está pausada</string>
++    <string name="carlink_home_resume">Retomar</string>
++
++    <string name="carlink_home_connecting_title">Iniciando o %1$s</string>
++    <string name="carlink_home_connecting_body">Mantenha o %1$s desbloqueado. Isso costuma levar alguns segundos.</string>
++    <string name="carlink_home_cancel">Cancelar</string>
++    <!-- The attempt's steps (LinkState.step 1-4): waiting for the phone, the phone answered, Wi-Fi link, picture. -->
++    <string name="carlink_home_step_reaching">Chamando o celular</string>
++    <string name="carlink_home_step_answered">Celular respondeu</string>
++    <string name="carlink_home_step_linking">Conectando</string>
++    <string name="carlink_home_step_picture">Imagem</string>
++    <!-- Under the progress line when the step names do not fit: "Step 2 of 4 · Identified". -->
++    <string name="carlink_home_step_of">Etapa %1$d de %2$d · %3$s</string>
++
++    <string name="carlink_home_connected_title">%1$s em execução</string>
++    <string name="carlink_home_connected_body">%1$s · %2$s · %3$s</string>
++    <string name="carlink_home_return">Voltar ao %1$s</string>
++    <string name="carlink_home_disconnect">Desconectar</string>
++
++    <string name="carlink_home_try_again">Tentar de novo</string>
++    <string name="carlink_home_diagnostics">Diagnóstico</string>
++    <string name="carlink_home_open_settings">Abrir configurações</string>
++    <string name="carlink_home_error_auth_title">O CarPlay não consegue se autenticar</string>
++    <string name="carlink_home_error_auth_body">Esta versão não tem os arquivos de autenticação do CarPlay. O Android Auto continua funcionando.</string>
++    <string name="carlink_home_error_iphone_title">Pareie o iPhone primeiro</string>
++    <string name="carlink_home_error_iphone_body">Pareie-o nas configurações de Bluetooth do carro e tente de novo. Por cabo funciona sem parear.</string>
++    <string name="carlink_home_error_hotspot_details_title">Adicione o hotspot do carro</string>
++    <string name="carlink_home_error_hotspot_details_body">O modo sem fio precisa do nome e da senha do hotspot do carro. Adicione-os uma vez.</string>
++    <string name="carlink_home_error_hotspot_off_title">O hotspot do carro está desligado</string>
++    <string name="carlink_home_error_hotspot_off_body">Ligue o hotspot desta tela, ou use o Wi-Fi Direct, que não precisa de hotspot.</string>
++    <string name="carlink_home_error_wifi_details_title">Adicione a senha do seu Wi-Fi</string>
++    <string name="carlink_home_error_wifi_details_body">Mesmo Wi-Fi está escolhido em Configurações › Conexão. O CarLink precisa do nome e da senha da rede uma vez.</string>
++    <string name="carlink_home_error_wifi_not_joined_title">Esta tela não está no seu Wi-Fi</string>
++    <string name="carlink_home_error_wifi_not_joined_body">Mesmo Wi-Fi exige que esta tela esteja na rede salva em Configurações › Conexão. Entre nessa rede, ou use o Wi-Fi Direct.</string>
++    <string name="carlink_home_error_engine_title">Não foi possível conectar</string>
++    <string name="carlink_home_error_engine_body">O %1$s interrompeu a conexão. Desbloqueie o celular e tente de novo.</string>
++
++    <string name="carlink_home_chip_bluetooth">Bluetooth</string>
++    <string name="carlink_home_chip_network">Rede</string>
++    <string name="carlink_home_chip_phone">Celular</string>
++    <string name="carlink_home_bt_chip_on">Ligado</string>
++    <string name="carlink_home_bt_chip_off">Desligado</string>
++    <string name="carlink_home_bt_no_permission">Precisa de permissão</string>
++    <string name="carlink_home_bt_chip_unsupported">Indisponível</string>
++    <string name="carlink_home_net_same_wifi">Mesmo Wi-Fi · mais rápido</string>
++    <string name="carlink_home_net_same_wifi_named">%1$s · mais rápido</string>
++    <string name="carlink_home_net_hotspot">Hotspot do carro</string>
++    <string name="carlink_home_net_direct">Wi-Fi Direct</string>
++    <string name="carlink_home_network_sheet_title">Tipo de conexão</string>
++    <string name="carlink_home_network_sheet_now">O Bluetooth inicia a conexão; a imagem e o som vão pelo Wi-Fi. Em uso agora: %1$s.</string>
++    <string name="carlink_home_no_phones">Nenhum celular ainda</string>
++    <plurals name="carlink_home_phone_count">
++        <item quantity="one">%d celular</item>
++        <item quantity="many">%d celulares</item>
++        <item quantity="other">%d celulares</item>
++    </plurals>
++
++    <string name="carlink_home_phones_title">Celulares</string>
++    <string name="carlink_home_phones_hint">Toque num celular para conectá-lo.</string>
++    <string name="carlink_home_phone_connected">Conectado ao carro</string>
++    <string name="carlink_home_phone_not_nearby">Pareado</string>
++    <string name="carlink_home_kind_title">Que tipo de celular é este?</string>
++    <string name="carlink_home_kind_iphone">iPhone</string>
++    <string name="carlink_home_kind_android">Celular Android</string>
++    <string name="carlink_home_switch_title">Trocar para %1$s?</string>
++    <string name="carlink_home_switch_body">O %1$s vai parar.</string>
++    <string name="carlink_home_switch_action">Trocar</string>
++
++    <string name="carlink_home_path_same_wifi">seu Wi-Fi</string>
++    <string name="carlink_home_path_hotspot">hotspot do carro</string>
++    <string name="carlink_home_path_direct">Wi-Fi Direct</string>
++    <string name="carlink_home_path_usb">USB</string>
++
++    <string name="carlink_home_same_wifi_title">Senha de %1$s</string>
++    <string name="carlink_home_wifi_dialog_title">Adicione seu Wi-Fi</string>
++    <string name="carlink_home_wifi_dialog_body">O CarLink salva nesta tela e conecta de novo.</string>
++    <string name="carlink_home_same_wifi_password">Senha do Wi-Fi</string>
++    <string name="carlink_home_same_wifi_save">Salvar</string>
++    <string name="carlink_home_same_wifi_enter">Adicionar senha</string>
++    <string name="carlink_home_same_wifi_invalid">Senhas de Wi-Fi têm de 8 a 63 caracteres.</string>
++    <string name="carlink_home_connecting_android_wireless">Aguardando o %1$s iniciar o Android Auto. Se nada acontecer em alguns segundos, desligue e ligue o Bluetooth do celular.</string>
++    <string name="carlink_home_connecting_connect_bluetooth">Conecte o %1$s no Bluetooth. O Android Auto começa sozinho assim que ele conectar.</string>
++    <string name="carlink_home_bluetooth_settings">Configurações de Bluetooth</string>
++    <!-- A wireless attempt the phone has not answered for 10 s (connection detail "phone_not_answering"). -->
++    <string name="carlink_home_eyebrow_not_answering">Sem resposta</string>
++    <string name="carlink_home_not_answering_title">Seu celular não está respondendo</string>
++    <string name="carlink_home_not_answering_title_iphone">iPhone não alcançável pelo Bluetooth</string>
++    <string name="carlink_home_not_answering_body_iphone">Desbloqueie o %1$s e confira se o Bluetooth dele está ligado, ou conecte-o com um cabo.</string>
++    <string name="carlink_home_not_answering_body_usb">Desbloqueie o %1$s e aceite o aviso na tela dele. Se nada acontecer, desconecte o cabo e conecte de novo.</string>
++    <string name="carlink_home_not_answering_body_android">Confira se o %1$s está com o Bluetooth ligado e desbloqueado, e mantenha-o perto desta tela. O Android Auto começa sozinho quando ele conectar.</string>
++    <!-- Connection v2: pre-flight problems and precise failures. -->
++    <string name="carlink_home_error_bt_off_title">O Bluetooth está desligado</string>
++    <string name="carlink_home_error_bt_off_body">As conexões sem fio começam pelo Bluetooth. Ligue-o, ou conecte o celular com um cabo.</string>
++    <string name="carlink_home_error_not_paired_title">Este celular não está pareado</string>
++    <string name="carlink_home_error_not_paired_body">No celular, abra o Bluetooth e pareie com esta tela; depois tente de novo.</string>
++    <!-- %1$s: the phone's Bluetooth name, or carlink_home_error_pairing_lost_phone. -->
++    <string name="carlink_home_error_pairing_lost_title">%1$s precisa ser pareado de novo</string>
++    <string name="carlink_home_error_pairing_lost_body">No celular, esqueça esta tela nas configurações de Bluetooth e pareie de novo.</string>
++    <string name="carlink_home_error_pairing_lost_phone">Seu celular</string>
++    <string name="carlink_home_open_bluetooth_settings">Abrir configurações de Bluetooth</string>
++    <!-- A call while the stereo's own phone link or another app may hold the microphone (a toast over the projection). -->
++    <string name="carlink_notice_call_microphone">O viva-voz da própria multimídia pode tomar o microfone. Atenda pela tela do CarPlay ou do Android Auto, ou desconecte o celular nas configurações de telefone da multimídia.</string>
++    <string name="carlink_home_error_wifi_off_title">O Wi-Fi está desligado</string>
++    <string name="carlink_home_error_wifi_off_body">A imagem vai pelo Wi-Fi. Ligue o Wi-Fi aqui; ele não precisa estar conectado a uma rede.</string>
++    <string name="carlink_home_error_location_off_title">A localização está desligada</string>
++    <string name="carlink_home_error_location_off_body">Com a localização desligada, o Android esconde os nomes de Wi-Fi e os dispositivos próximos, então a conexão sem fio não começa. Ligue-a e volte aqui.</string>
++    <string name="carlink_home_error_permissions_title">Permissões necessárias</string>
++    <string name="carlink_home_error_permissions_body">O CarLink precisa de Dispositivos próximos, Localização e Microfone para conectar seu celular.</string>
++    <string name="carlink_home_error_overlay_title">Permita que o CarLink abra sobre outros apps</string>
++    <string name="carlink_home_error_overlay_body">Assim o CarPlay ou o Android Auto aparecem assim que o celular conecta.</string>
++    <string name="carlink_home_error_vpn_title">Permita a conexão do CarPlay</string>
++    <string name="carlink_home_error_vpn_body">O CarPlay por cabo usa uma conexão privada. O Android pede uma vez para permiti-la.</string>
++    <string name="carlink_home_error_refused_title">Seu celular não conseguiu entrar no Wi-Fi</string>
++    <string name="carlink_home_error_refused_body">Confira a senha do Wi-Fi em Configurações, ou mude o tipo de conexão para Wi-Fi Direct.</string>
++    <string name="carlink_home_error_unreached_title">Seu iPhone não conseguiu alcançar esta tela</string>
++    <string name="carlink_home_error_unreached_body">Sua rede bloqueia a conexão de que o CarPlay precisa. Escolha o Wi-Fi Direct, ou conecte com um cabo.</string>
++    <string name="carlink_home_error_weak_title">O sinal sem fio estava fraco demais</string>
++    <string name="carlink_home_error_weak_body">Deixe o celular perto da tela e tente de novo, ou conecte com um cabo.</string>
++    <string name="carlink_home_error_no_answer_title">Seu celular não respondeu</string>
++    <string name="carlink_home_error_no_answer_body">Desbloqueie o celular, confira se o Bluetooth dele está ligado e conectado a esta tela, e tente de novo.</string>
++    <string name="carlink_home_error_bluetooth_title">A conexão Bluetooth falhou</string>
++    <string name="carlink_home_error_bluetooth_body">No celular, desligue e ligue o Bluetooth e tente de novo. Se continuar falhando, esqueça esta tela e pareie de novo.</string>
++    <!-- The stereo's Bluetooth is an external module apps cannot use (detect/ExternalBluetoothProbe). -->
++    <string name="carlink_home_error_external_bt_title">O modo sem fio ainda não está disponível nesta multimídia</string>
++    <string name="carlink_home_error_external_module_title">Não foi possível acessar o módulo Bluetooth da multimídia</string>
++    <string name="carlink_home_error_external_module_body">O modo sem fio pelo módulo Bluetooth da multimídia é experimental e não funcionou aqui. Numa multimídia FYT, desative primeiro o app “Car Link” da própria multimídia. Senão, conecte o celular com um cabo USB — funciona do mesmo jeito. Compartilhe o log do Diagnóstico para isso ser corrigido.</string>
++    <string name="carlink_home_error_external_bt_body">O Bluetooth desta multimídia é um módulo separado que os apps não conseguem usar, então o CarPlay e o Android Auto não começam sem fio. Conecte o celular com um cabo USB — funciona do mesmo jeito.</string>
++    <string name="carlink_home_how_to_connect">Como conectar</string>
++    <string name="carlink_home_cable_title">Conectar com cabo USB</string>
++    <string name="carlink_home_cable_body">1. Conecte o celular na porta USB da multimídia com um cabo que transmita dados (não um cabo só de carga).\n2. iPhone: o CarPlay começa sozinho. Celular Android: desbloqueie-o e permita o Android Auto se ele pedir.\n\nO modo sem fio precisa do Bluetooth da multimídia, que os apps ainda não conseguem acessar nesta multimídia.</string>
++    <string name="carlink_home_cable_ok">Entendi</string>
++    <string name="carlink_home_error_usb_title">A conexão USB falhou</string>
++    <string name="carlink_home_error_usb_body">Desbloqueie o celular e aceite o aviso dele. Se continuar falhando, tente outro cabo.</string>
++    <string name="carlink_home_fix_turn_on">Ligar</string>
++    <string name="carlink_home_fix_allow">Permitir</string>
++    <string name="carlink_home_fix_open_settings">Abrir configurações</string>
++    <string name="carlink_home_fix_use_direct">Usar Wi-Fi Direct</string>
++    <string name="carlink_home_fix_open_wifi">Abrir Wi-Fi</string>
++    <string name="carlink_home_fix_open_hotspot">Abrir configurações do hotspot</string>
++    <string name="carlink_switch_title">Trocar para %1$s?</string>
++    <string name="carlink_switch_body">O %1$s vai parar.</string>
++    <string name="carlink_switch_confirm">Trocar</string>
++    <string name="carlink_switch_keep">Agora não</string>
++    <string name="carlink_switch_how">%1$s · %2$s</string>
++    <string name="carlink_switch_via_usb">Conectado por USB</string>
++    <string name="carlink_switch_via_wireless">Disponível sem fio</string>
++    <!--
++      Why an attempt is waiting (SessionState.Active.notice as core.LinkNotice), in the driver's
++      words. %1$s is "iPhone" or "phone" (carlink_notice_phone_*).
++    -->
++    <string name="carlink_notice_phone_iphone">iPhone</string>
++    <string name="carlink_notice_phone_other">celular</string>
++    <string name="carlink_notice_slow_reaching">Demorando mais que o normal para alcançar o %1$s…</string>
++    <string name="carlink_notice_slow_handshake">Demorando mais que o normal: o %1$s ainda está respondendo…</string>
++    <string name="carlink_notice_slow_linking">Demorando mais que o normal: entrando no Wi-Fi…</string>
++    <string name="carlink_notice_slow_picture">Demorando mais que o normal: iniciando a imagem…</string>
++    <!-- iOS 27 black screen with sound (DiPlay #249); the button turns the setting on and reconnects. -->
++    <string name="carlink_notice_no_picture">Tem som mas não tem imagem? Ligue a Saída de vídeo direta</string>
++    <string name="carlink_home_direct_video_action">Ligar e reconectar</string>
++    <string name="carlink_notice_wake">Demorando mais que o normal: chamando o %1$s de novo…</string>
++    <string name="carlink_notice_restart_usb">Demorando mais que o normal: reiniciando a conexão USB…</string>
++    <string name="carlink_notice_retry">Demorando mais que o normal: tentando de novo…</string>
++    <string name="carlink_notice_fresh_wifi">Demorando mais que o normal: reconectando o Wi-Fi…</string>
++    <string name="carlink_notice_try_direct">Tentando pelo Wi-Fi Direct</string>
++    <string name="carlink_notice_try_hotspot">Tentando pelo hotspot do carro</string>
++    <string name="carlink_notice_try_same_wifi">Tentando pelo seu Wi-Fi</string>
++    <string name="carlink_notice_try_other">Tentando outra forma de conectar</string>
++    <string name="carlink_notice_replug">Desconecte o %1$s e conecte de novo</string>
++    <string name="carlink_notice_not_answering">O %1$s ainda não está respondendo</string>
++    <string name="carlink_notice_retry_bluetooth">Tentando de novo: o %1$s não respondeu pelo Bluetooth</string>
++    <string name="carlink_notice_retry_refused">Tentando de novo: o %1$s não aceitou o Wi-Fi do carro</string>
++    <string name="carlink_notice_retry_unreached">Tentando de novo: o %1$s não alcançou o Wi-Fi do carro</string>
++    <string name="carlink_notice_retry_dropped">Tentando de novo: a conexão caiu</string>
++    <string name="carlink_notice_retry_usb">Tentando de novo: a conexão USB reiniciou</string>
++    <string name="carlink_notice_retry_plain">Tentando de novo…</string>
++    <!-- A known phone's record under Home's headline: "Usually connects in 5 s by Wi-Fi Direct". -->
++    <string name="carlink_home_usual">Costuma conectar em %1$s %2$s</string>
++    <string name="carlink_home_usual_by_cable">por cabo</string>
++    <string name="carlink_home_usual_by_path">via %1$s</string>
++    <string name="carlink_seconds_short">%1$s s</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_diagnostics.xml b/app/src/main/res/values-pt-rBR/carlink_strings_diagnostics.xml
+new file mode 100644
+index 0000000..900eae7
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_diagnostics.xml
+@@ -0,0 +1,301 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Diagnostics (DESIGN_SPEC §6.5) and About (§6.6). Brazilian Portuguese. -->
++<resources>
++
++    <!-- ===== Diagnostics ===== -->
++    <string name="carlink_diag_title">Diagnóstico</string>
++    <string name="carlink_diag_live_session">Sessão ao vivo</string>
++    <string name="carlink_diag_checks">Verificações</string>
++
++    <!-- Live session -->
++    <string name="carlink_diag_idle_title">Nenhum celular conectado</string>
++    <string name="carlink_diag_idle_body">Os detalhes aparecem aqui enquanto um celular conecta ou está conectado.</string>
++    <string name="carlink_diag_phone_unnamed">Celular</string>
++    <string name="carlink_diag_stage_idle">Não conectado</string>
++    <string name="carlink_diag_stage_waiting">Aguardando o celular</string>
++    <string name="carlink_diag_stage_connecting">Conectando</string>
++    <string name="carlink_diag_stage_connected">Conectado</string>
++    <string name="carlink_diag_stage_failed">Não conectou</string>
++    <string name="carlink_diag_tile_engine">Motor</string>
++    <string name="carlink_diag_tile_transport">Conexão</string>
++    <string name="carlink_diag_tile_step">Etapa</string>
++    <string name="carlink_diag_tile_connected_for">Conectado há</string>
++    <string name="carlink_diag_tile_attempt">Tempo até agora</string>
++    <string name="carlink_diag_tile_last_error">Último erro</string>
++    <string name="carlink_diag_tile_current_step">Etapa atual</string>
++    <!-- Step on the connection timeline, e.g. "2 of 5". -->
++    <string name="carlink_diag_step_value">%1$d de %2$d</string>
++    <string name="carlink_diag_not_known">Ainda desconhecido</string>
++
++    <!-- Checks -->
++    <string name="carlink_diag_checks_all_passed">Tudo parece pronto</string>
++    <plurals name="carlink_diag_checks_problems">
++        <item quantity="one">%d item requer atenção</item>
++        <item quantity="many">%d itens requerem atenção</item>
++        <item quantity="other">%d itens requerem atenção</item>
++    </plurals>
++    <string name="carlink_diag_checking">Verificando…</string>
++    <string name="carlink_diag_status_pass">OK</string>
++    <string name="carlink_diag_status_warn">Aviso</string>
++    <string name="carlink_diag_status_fail">Problema</string>
++    <string name="carlink_diag_status_info">Observação</string>
++    <string name="carlink_diag_fix">Corrigir</string>
++    <string name="carlink_diag_resume">Retomar</string>
++    <!-- Screen-reader label of a check's Fix button, e.g. "Fix: Bluetooth is off". -->
++    <string name="carlink_diag_fix_a11y">Corrigir: %1$s</string>
++
++    <string name="carlink_diag_auth_ok">Arquivos de autenticação do CarPlay presentes</string>
++    <string name="carlink_diag_auth_bundled">Incluídos nesta versão.</string>
++    <string name="carlink_diag_auth_installed">Instalados por uma versão anterior. Esta versão não os inclui.</string>
++    <string name="carlink_diag_auth_missing">Os arquivos de autenticação do CarPlay não estão nesta versão</string>
++    <string name="carlink_diag_auth_missing_note">O CarPlay não conecta até a versão incluí-los. O Android Auto não é afetado.</string>
++    <string name="carlink_diag_auth_external">O CarPlay usa autenticação externa</string>
++    <!-- %1$s is one of the carlink_diag_auth_target_* strings. -->
++    <string name="carlink_diag_auth_external_body">As configurações do CarPlay usam %1$s, então os arquivos embutidos não são necessários.</string>
++    <string name="carlink_diag_auth_target_ch341">um chip de autenticação USB (CH341)</string>
++    <string name="carlink_diag_auth_target_i2c">um chip de autenticação I²C</string>
++    <string name="carlink_diag_auth_target_remote">um servidor de autenticação remoto</string>
++
++    <string name="carlink_diag_bt_on">O Bluetooth está ligado</string>
++    <string name="carlink_diag_bt_off">O Bluetooth está desligado</string>
++    <string name="carlink_diag_bt_off_body">As conexões sem fio e a detecção do celular precisam do Bluetooth.</string>
++    <!-- Car stereo Bluetooth check (detect/ExternalBluetoothProbe). -->
++    <string name="carlink_diag_stereo_bt_ok">Bluetooth da multimídia</string>
++    <string name="carlink_diag_stereo_bt_ok_body">Integrado. O CarPlay e o Android Auto sem fio podem usá-lo.</string>
++    <string name="carlink_diag_stereo_bt_external">O Bluetooth da multimídia é um módulo separado</string>
++    <!-- %1$s: the evidence, e.g. "a Bluetooth module service is running, the module's serial port". -->
++    <string name="carlink_diag_stereo_bt_external_body">Encontrado: %1$s. Os apps não conseguem usar esse módulo, então o CarPlay e o Android Auto sem fio ainda não funcionam nesta multimídia. O cabo USB funciona.</string>
++    <string name="carlink_diag_stereo_bt_maybe">O Bluetooth da multimídia pode ser um módulo separado</string>
++    <string name="carlink_diag_stereo_bt_maybe_body">Encontrado: %1$s. Seu celular está pareado com o Bluetooth do Android desta multimídia, então o modo sem fio ainda pode funcionar. Se não funcionar, o cabo USB funciona.</string>
++    <string name="carlink_diag_stereo_bt_override_note">“Sem fio pelo módulo Bluetooth da multimídia (experimental)” está ligado nas Configurações.</string>
++    <string name="carlink_diag_stereo_signal_service">um serviço de módulo Bluetooth está rodando</string>
++    <string name="carlink_diag_stereo_signal_fyt_setting">as configurações da multimídia indicam um módulo Bluetooth externo</string>
++    <string name="carlink_diag_stereo_signal_fyt_port">a porta serial do módulo FYT</string>
++    <string name="carlink_diag_stereo_signal_module_port">a porta serial de um módulo Bluetooth</string>
++    <string name="carlink_diag_stereo_signal_module_setting">as configurações da multimídia marcam o Bluetooth como externo</string>
++    <string name="carlink_diag_stereo_signal_separator">", "</string>
++    <string name="carlink_diag_bt_absent">Este aparelho não tem Bluetooth</string>
++    <string name="carlink_diag_bt_absent_body">Conecte os celulares por USB.</string>
++
++    <string name="carlink_diag_bt_perm_ok">Permissão de Bluetooth concedida</string>
++    <string name="carlink_diag_bt_perm_missing">Permissão de Bluetooth não concedida</string>
++    <string name="carlink_diag_bt_perm_body">O CarLink precisa dela para encontrar seus celulares e iniciar conexões sem fio.</string>
++
++    <plurals name="carlink_diag_phones_count">
++        <item quantity="one">%d celular pareado</item>
++        <item quantity="many">%d celulares pareados</item>
++        <item quantity="other">%d celulares pareados</item>
++    </plurals>
++    <string name="carlink_diag_phones_body">O CarLink escolhe o CarPlay ou o Android Auto para cada um.</string>
++    <plurals name="carlink_diag_phones_unknown">
++        <item quantity="one">O tipo de %d celular ainda não é conhecido. Conecte-o uma vez para identificá-lo.</item>
++        <item quantity="many">O tipo de %d celulares ainda não é conhecido. Conecte cada um uma vez para identificá-lo.</item>
++        <item quantity="other">O tipo de %d celulares ainda não é conhecido. Conecte cada um uma vez para identificá-lo.</item>
++    </plurals>
++    <string name="carlink_diag_phones_none">Nenhum celular pareado</string>
++    <string name="carlink_diag_phones_none_body">Primeiro pareie seu celular com o Bluetooth deste aparelho.</string>
++
++    <string name="carlink_diag_auto_on">A conexão automática está ligada</string>
++    <string name="carlink_diag_auto_paused">A conexão automática está pausada</string>
++    <string name="carlink_diag_auto_paused_body">Ela pausa quando você desconecta. Retome para voltar a conectar os celulares automaticamente.</string>
++    <string name="carlink_diag_auto_off">A conexão automática está desligada</string>
++    <string name="carlink_diag_auto_off_body">Você pode ligá-la nas Configurações.</string>
++
++    <string name="carlink_diag_location_ok">Permissão de localização concedida</string>
++    <string name="carlink_diag_location_missing">Permissão de localização não concedida</string>
++    <string name="carlink_diag_location_body">Necessária para conexões sem fio e para compartilhar a localização do carro com o celular.</string>
++
++    <string name="carlink_diag_nearby_ok">Dispositivos Wi-Fi por perto permitidos</string>
++    <string name="carlink_diag_nearby_missing">Dispositivos Wi-Fi por perto não permitidos</string>
++    <string name="carlink_diag_nearby_body">As conexões sem fio pelo Wi-Fi precisam disso.</string>
++
++    <string name="carlink_diag_mic_ok">Microfone permitido</string>
++    <string name="carlink_diag_mic_missing">Microfone não permitido</string>
++    <string name="carlink_diag_mic_body">Ligações e assistentes de voz precisam dele.</string>
++
++    <string name="carlink_diag_notif_ok">Notificações permitidas</string>
++    <string name="carlink_diag_notif_missing">Notificações não permitidas</string>
++    <string name="carlink_diag_notif_body">O CarLink usa uma notificação para avisar quando um celular está pronto.</string>
++
++    <string name="carlink_diag_overlay_ok">Sobrepor a outros apps permitido</string>
++    <string name="carlink_diag_overlay_missing">Sobrepor a outros apps não permitido</string>
++    <string name="carlink_diag_overlay_body">Permite que o CarLink abra o CarPlay ou o Android Auto quando um celular conecta em segundo plano.</string>
++
++    <string name="carlink_diag_battery_ok">A otimização de bateria está desligada</string>
++    <string name="carlink_diag_battery_on">A otimização de bateria está ligada</string>
++    <string name="carlink_diag_battery_body">O Android pode parar o CarLink em segundo plano e perder a conexão de um celular.</string>
++
++    <string name="carlink_diag_usb_ok">USB host compatível</string>
++    <string name="carlink_diag_usb_ok_body">Os celulares podem conectar por cabo.</string>
++    <string name="carlink_diag_usb_missing">USB host não compatível</string>
++    <string name="carlink_diag_usb_missing_body">Este aparelho não conecta celulares por cabo. Use uma conexão sem fio.</string>
++
++    <string name="carlink_diag_p2p_ok">Wi-Fi Direct compatível</string>
++    <string name="carlink_diag_p2p_missing">Wi-Fi Direct não compatível</string>
++    <string name="carlink_diag_p2p_missing_body">As conexões sem fio precisam de um hotspot.</string>
++
++    <string name="carlink_diag_avc_ok">Decodificador H.264 por hardware</string>
++    <string name="carlink_diag_avc_missing">Sem decodificador H.264 por hardware</string>
++    <string name="carlink_diag_avc_missing_body">O vídeo projetado pode travar ou não iniciar.</string>
++    <string name="carlink_diag_hevc_ok">Decodificador HEVC por hardware</string>
++    <string name="carlink_diag_hevc_missing">Sem decodificador HEVC por hardware</string>
++    <string name="carlink_diag_hevc_missing_body">Opcional. O H.264 é usado no lugar.</string>
++    <!-- Decoder name and its largest frame size, e.g. "c2.qti.avc.decoder, up to 4096×2176". -->
++    <string name="carlink_diag_decoder_detail">%1$s, até %2$s</string>
++
++    <!-- Summary under the title -->
++    <string name="carlink_diag_summary_body">O CarLink verifica este aparelho de novo toda vez que você abre esta página.</string>
++    <string name="carlink_diag_open_settings">Abrir Configurações</string>
++
++    <!-- Connection log: the engines’ and CarLink’s recent activity, newest first -->
++    <string name="carlink_diag_log_title">Log de conexão</string>
++    <string name="carlink_diag_log_body">Atividade recente do CarPlay, do Android Auto e do CarLink, da mais nova para a mais antiga. Os endereços ficam ocultos.</string>
++    <string name="carlink_diag_log_filter_all">Tudo</string>
++    <string name="carlink_diag_log_share">Compartilhar log</string>
++    <string name="carlink_diag_log_share_subject">Log de conexão do CarLink</string>
++    <string name="carlink_diag_log_share_chooser">Compartilhar o log de conexão</string>
++    <string name="carlink_diag_log_loading">Lendo os logs…</string>
++    <string name="carlink_diag_log_empty_title">Nenhuma atividade de conexão ainda</string>
++    <!-- %1$s is a filter name: CarPlay, Android Auto or CarLink. -->
++    <string name="carlink_diag_log_empty_filtered">Nada de %1$s ainda</string>
++    <string name="carlink_diag_log_empty_body">As linhas aparecem aqui quando um celular conecta ou o CarLink inicia o CarPlay ou o Android Auto.</string>
++    <!-- First line of the shared log file: versions and device, e.g.
++         "CarLink 0.1.0 (1) · DiPlay 0.2.15 · DiAuto 0.3.11 · BYD DiLink5 · Android 10". -->
++    <string name="carlink_diag_log_report_header">CarLink %1$s (%2$d) · DiPlay %3$s · DiAuto %4$s · %5$s %6$s · Android %7$s</string>
++
++    <!-- ===== Report a problem on GitHub (Diagnostics, Home's failure states) ===== -->
++    <string name="carlink_report_action">Relatar no GitHub</string>
++    <string name="carlink_report_title">Relatar um problema no GitHub</string>
++    <string name="carlink_report_intro">O CarLink abre uma nova issue no GitHub com estes detalhes preenchidos. Confira no navegador e toque em Submit.</string>
++    <string name="carlink_report_preparing">Preparando o relatório…</string>
++    <string name="carlink_report_included">O que está incluído</string>
++    <string name="carlink_report_field_title">Título</string>
++    <string name="carlink_report_field_version">Versão do CarLink</string>
++    <string name="carlink_report_field_screen">Esta tela</string>
++    <string name="carlink_report_field_phone">Celular</string>
++    <string name="carlink_report_field_projection">CarPlay ou Android Auto</string>
++    <string name="carlink_report_field_connection">Conexão</string>
++    <string name="carlink_report_field_car_brand">Marca do carro</string>
++    <string name="carlink_report_field_what_happened">O que aconteceu</string>
++    <!-- %1$d lines of the connection log are in the report; the plural below says how many stay out. -->
++    <plurals name="carlink_report_log_lines">
++        <item quantity="one">Log de conexão: %1$d linha</item>
++        <item quantity="many">Log de conexão: %1$d linhas</item>
++        <item quantity="other">Log de conexão: %1$d linhas</item>
++    </plurals>
++    <plurals name="carlink_report_log_more">
++        <item quantity="one">Mais %1$d linha está só em Compartilhar log.</item>
++        <item quantity="many">Mais %1$d linhas estão só em Compartilhar log.</item>
++        <item quantity="other">Mais %1$d linhas estão só em Compartilhar log.</item>
++    </plurals>
++    <string name="carlink_report_public">Isto abre uma issue pública que qualquer pessoa pode ler. Endereços e senhas são removidos.</string>
++    <string name="carlink_report_sign_in">O navegador precisa estar conectado ao GitHub. Entre uma vez; ele continua conectado.</string>
++    <string name="carlink_report_open">Abrir o GitHub</string>
++    <string name="carlink_report_cancel">Cancelar</string>
++    <string name="carlink_report_qr_title">Relatar pelo celular</string>
++    <string name="carlink_report_qr_body">Esta tela não tem navegador. Escaneie o código com o celular: ele abre o relatório no GitHub com a versão, esta tela e o erro preenchidos.</string>
++    <string name="carlink_report_qr_log">O log não cabe no código. Compartilhar log o salva para você anexá-lo à issue.</string>
++    <string name="carlink_report_qr_a11y">Código QR que abre o relatório de problema no GitHub</string>
++    <string name="carlink_report_done">Concluído</string>
++
++    <!-- ===== About ===== -->
++    <string name="carlink_about_title">Sobre</string>
++    <string name="carlink_about_tagline">CarPlay e Android Auto num só app.</string>
++    <!-- The version as a tag under the name, e.g. "Version 0.1.0 (1)". -->
++    <string name="carlink_about_version_tag">Versão %1$s</string>
++    <string name="carlink_about_engines">Motores</string>
++    <string name="carlink_about_open_source">Código aberto</string>
++    <!-- Version name and build number, e.g. "0.1.0 (1)". -->
++    <string name="carlink_about_version_value">%1$s (%2$d)</string>
++    <string name="carlink_about_carplay_engine">Motor do CarPlay</string>
++    <string name="carlink_about_carplay_engine_value">DiPlay %1$s</string>
++    <string name="carlink_about_aa_engine">Motor do Android Auto</string>
++    <string name="carlink_about_aa_engine_value">DiAuto %1$s</string>
++    <string name="carlink_about_device">Este aparelho</string>
++    <!-- Manufacturer and model, e.g. "BYD DiLink5". -->
++    <string name="carlink_about_device_name">%1$s %2$s</string>
++    <!-- Android version and screen size in pixels, e.g. "Android 10 · 1920×1080 px". -->
++    <string name="carlink_about_device_system">Android %1$s · %2$s px</string>
++    <string name="carlink_about_licenses">Licenças de código aberto</string>
++    <string name="carlink_about_licenses_body">O CarLink é software livre sob a GNU AGPL v3.</string>
++    <string name="carlink_about_credits">Créditos</string>
++    <string name="carlink_about_credits_body">DiPlay, DiAuto, Open Headunit, headunit e outros</string>
++    <string name="carlink_about_source">Código-fonte</string>
++    <string name="carlink_about_source_body">Escaneie com o celular para obter o código-fonte dos dois motores.</string>
++    <string name="carlink_about_qr_carplay">Motor do CarPlay (DiPlay)</string>
++    <string name="carlink_about_qr_aa">Motor do Android Auto (DiAuto)</string>
++    <!-- Screen-reader description of a QR code; %1$s is the web address it opens. -->
++    <string name="carlink_about_qr_a11y">Código QR para %1$s</string>
++    <string name="carlink_about_legal">Marcas registradas</string>
++    <string name="carlink_about_trademarks">CarPlay é uma marca registrada da Apple Inc. Android Auto é uma marca registrada da Google LLC. O CarLink não é afiliado nem endossado pela Apple ou pelo Google.</string>
++    <string name="carlink_about_not_certified">O motor do CarPlay (DiPlay) não é um produto certificado pela Apple.</string>
++    <string name="carlink_about_byd">BYD e DiLink pertencem ao seu dono. O CarLink não é afiliado nem endossado pela BYD.</string>
++    <string name="carlink_about_close">Fechar</string>
++
++    <!-- Licenses sheet -->
++    <string name="carlink_about_licenses_intro">O CarLink combina o motor de CarPlay DiPlay (GNU GPL v3) e o motor de Android Auto DiAuto (GNU AGPL v3). A obra combinada é distribuída sob a GNU Affero General Public License, versão 3. Você pode copiá-la, alterá-la e compartilhá-la nesses termos. Ela vem sem nenhuma garantia.</string>
++    <string name="carlink_about_licenses_source">A licença lhe dá direito ao código-fonte completo. Os códigos QR na página Sobre levam ao código-fonte dos dois motores.</string>
++    <string name="carlink_about_components">Componentes</string>
++    <string name="carlink_about_read_agpl">GNU Affero General Public License v3</string>
++    <string name="carlink_about_read_gpl">GNU General Public License v3</string>
++    <string name="carlink_about_read_bydmate">PolyForm Noncommercial License 1.0.0 (ícones do HUD do BYD)</string>
++    <string name="carlink_about_full_texts">Textos completos das licenças</string>
++    <string name="carlink_about_text_unavailable">Esta versão não inclui o texto da licença.</string>
++
++    <string name="carlink_about_lic_diplay">GNU GPL v3. Uma versão modificada do xcertplay de shilapi (GNU GPL v3).</string>
++    <string name="carlink_about_lic_diauto">GNU AGPL v3. Mantém os avisos de copyright do Open Headunit e de Michael A. Reid.</string>
++    <string name="carlink_about_lic_bydmate_name">Ícones de manobra do HUD do BYD</string>
++    <string name="carlink_about_lic_bydmate">Copyright AndyShaman (BYDMate, github.com/AndyShaman/BYDMate). PolyForm Noncommercial License 1.0.0. Estas imagens não são cobertas pela licença do CarLink. O projeto de origem as descreve como recursos doados; a fonte original delas não foi confirmada de forma independente.</string>
++    <string name="carlink_about_lic_ffmpeg">GNU LGPL v2.1 ou posterior. Decodificação HEVC por software em ARM de 64 bits.</string>
++    <string name="carlink_about_lic_libusb">GNU LGPL v2.1 ou posterior.</string>
++    <string name="carlink_about_lic_speex">Licença no estilo BSD de 3 cláusulas. Xiph.Org Foundation e colaboradores.</string>
++    <string name="carlink_about_lic_bc">Licença Bouncy Castle (estilo MIT).</string>
++    <string name="carlink_about_lic_protobuf">Licença BSD de 3 cláusulas.</string>
++    <string name="carlink_about_lic_glide">BSD, em parte MIT e Apache License 2.0.</string>
++    <string name="carlink_about_lic_slf4j">Licença MIT.</string>
++    <string name="carlink_about_lic_apache_name">Apache License 2.0</string>
++    <string name="carlink_about_lic_apache">Material Symbols, AndroidX, Jetpack Compose, Material Components, Kotlin, Conscrypt, ZXing, JmDNS, DexMaker, Shizuku API e libsu.</string>
++    <string name="carlink_about_lic_others">Cada biblioteca mantém seus avisos originais. A lista completa de dependências está nos arquivos de build do código-fonte.</string>
++
++    <!-- Credits sheet -->
++    <string name="carlink_about_credit_diplay">O motor do CarPlay, de shihabal3amri. Baseado no xcertplay de shilapi, que credita LIVI e Showcase pela pesquisa do protocolo.</string>
++    <string name="carlink_about_credit_diauto">O motor do Android Auto, de shihabal3amri. Um fork independente do Open Headunit e seus colaboradores.</string>
++    <string name="carlink_about_credit_openheadunit">Antigo Headunit Revived. © 2025 André Rinas e colaboradores.</string>
++    <string name="carlink_about_credit_headunit">A multimídia por software original para o Android Auto. © 2011–2015 Michael A. Reid. GNU AGPL v3.</string>
++    <string name="carlink_about_credit_bydmate">Ícones de manobra do HUD do BYD. Copyright AndyShaman.</string>
++    <string name="carlink_about_credit_symbols">Ícones do Google, Apache License 2.0.</string>
++    <!-- Diagnostics › Phones: each known phone's connection record (SessionManager.health). -->
++    <string name="carlink_diag_phones">Celulares</string>
++    <string name="carlink_diag_phones_empty_title">Nenhuma conexão ainda</string>
++    <string name="carlink_diag_phones_empty_body">O histórico de cada celular aparece aqui depois da primeira conexão: com que frequência conecta, com que rapidez e o que deu errado.</string>
++    <string name="carlink_diag_phone_attempts">%1$s · %2$d de %3$d conectaram</string>
++    <string name="carlink_diag_phone_rate">%1$d%%</string>
++    <string name="carlink_diag_phone_rate_none">—</string>
++    <string name="carlink_diag_phone_rate_description">Conecta em %1$d%% das vezes</string>
++    <string name="carlink_diag_phone_typical">Tempo habitual</string>
++    <string name="carlink_diag_phone_best">Funciona melhor por</string>
++    <string name="carlink_diag_phone_not_yet">Ainda não</string>
++    <string name="carlink_diag_phone_cable">Cabo</string>
++    <string name="carlink_diag_phone_problems">Problemas recentes</string>
++    <string name="carlink_diag_phone_no_problems">Nenhum problema recente</string>
++    <string name="carlink_diag_phone_problem_on">%1$s · %2$s</string>
++    <string name="carlink_diag_time_yesterday">Ontem %1$s</string>
++    <string name="carlink_diag_problem_no_answer">O celular não respondeu</string>
++    <string name="carlink_diag_problem_bluetooth">A conexão Bluetooth falhou</string>
++    <string name="carlink_diag_problem_external_bt">Bluetooth da multimídia fora de alcance</string>
++    <string name="carlink_diag_problem_external_module">O módulo Bluetooth da multimídia não respondeu</string>
++    <string name="carlink_diag_problem_refused_wifi">O celular recusou o Wi-Fi do carro</string>
++    <string name="carlink_diag_problem_unreached">O celular não alcançou o Wi-Fi do carro</string>
++    <string name="carlink_diag_problem_dropped">A conexão caiu</string>
++    <string name="carlink_diag_problem_wifi_setup">A conexão Wi-Fi do carro não iniciou</string>
++    <string name="carlink_diag_problem_usb">A conexão USB falhou</string>
++    <string name="carlink_diag_problem_blocked">Faltava uma permissão ou opção ligada</string>
++    <string name="carlink_diag_problem_auth">A autenticação do CarPlay falhou</string>
++    <string name="carlink_diag_problem_engine">O motor parou</string>
++    <string name="carlink_diag_problem_slow_reaching">Demorou para responder</string>
++    <string name="carlink_diag_problem_slow_handshake">Handshake lento</string>
++    <string name="carlink_diag_problem_slow_linking">Demorou para entrar no Wi-Fi</string>
++    <string name="carlink_diag_problem_slow_picture">Demorou para iniciar a imagem</string>
++    <string name="carlink_diag_problem_slow_total">Demorou demais no total</string>
++    <string name="carlink_diag_problem_other">Problema de conexão</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_settings.xml b/app/src/main/res/values-pt-rBR/carlink_strings_settings.xml
+new file mode 100644
+index 0000000..c7e556d
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_settings.xml
+@@ -0,0 +1,258 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- CarLink Settings (design/RESEARCH_PREMIUM_UX.md §8). Brazilian Portuguese. -->
++<resources>
++    <!-- Screen -->
++    <string name="carlink_settings_title">Configurações</string>
++    <string name="carlink_settings_back">Voltar</string>
++    <string name="carlink_settings_show_advanced">Mostrar avançado</string>
++    <string name="carlink_settings_show_advanced_detail">Todas as opções do CarPlay e do Android Auto, dentro de cada categoria</string>
++    <string name="carlink_settings_about">Sobre</string>
++    <string name="carlink_settings_about_summary">Versão, licenças e créditos</string>
++
++    <!-- Categories -->
++    <string name="carlink_settings_cat_connection">Conexão</string>
++    <string name="carlink_settings_cat_display">Tela</string>
++    <string name="carlink_settings_cat_sound">Som e voz</string>
++    <string name="carlink_settings_cat_navigation">Navegação</string>
++    <string name="carlink_settings_cat_car">Carro</string>
++    <string name="carlink_settings_cat_general">Geral</string>
++    <string name="carlink_settings_cat_connection_summary">Início automático, Wi-Fi e hotspot</string>
++    <string name="carlink_settings_cat_display_summary">Imagem, tamanho, dia e noite</string>
++    <string name="carlink_settings_cat_sound_summary">Onde tocam a música e as ligações</string>
++    <string name="carlink_settings_cat_navigation_summary">Localização do carro e rotas</string>
++    <string name="carlink_settings_cat_car_summary">Lado do volante e controles</string>
++    <string name="carlink_settings_cat_general_summary">Aparência do CarLink, ajuda e versão</string>
++
++    <!-- Shared -->
++    <string name="carlink_settings_custom">Personalizado (definido em Avançado)</string>
++    <string name="carlink_settings_custom_detail">Os valores exatos ficam em Mostrar avançado.</string>
++    <string name="carlink_settings_applies_next">Vale a partir da próxima conexão</string>
++    <string name="carlink_settings_loading">Carregando…</string>
++    <string name="carlink_settings_not_set">Não definido</string>
++    <string name="carlink_settings_done">Concluído</string>
++    <string name="carlink_settings_close">Fechar</string>
++
++    <!-- Connection -->
++    <string name="carlink_settings_group_start">Início</string>
++    <string name="carlink_settings_auto_bluetooth">Conectar automaticamente</string>
++    <string name="carlink_settings_auto_bluetooth_detail">Iniciar o CarPlay ou o Android Auto quando o Bluetooth de um celular pareado conectar</string>
++    <string name="carlink_settings_auto_usb">Conectar ao plugar o cabo</string>
++    <string name="carlink_settings_auto_usb_detail">Iniciar assim que um celular for conectado com cabo USB</string>
++    <string name="carlink_settings_start_boot">Iniciar com o carro</string>
++    <string name="carlink_settings_start_boot_detail">Abrir o CarLink quando a multimídia ligar</string>
++    <string name="carlink_settings_paused_title">A conexão automática está pausada</string>
++    <string name="carlink_settings_paused_body">Você desconectou, então o CarLink não reconecta sozinho até você conectar de novo.</string>
++    <string name="carlink_settings_resume">Retomar</string>
++
++    <string name="carlink_settings_group_wireless">Sem fio</string>
++    <string name="carlink_settings_root">Modo root</string>
++    <string name="carlink_settings_root_detail">Para multimídias com root. Permite tudo o que a configuração pede sem janelas de aviso e mantém o Wi-Fi em modo de baixa latência enquanto um celular está conectado. Seu gerenciador de root pergunta uma vez.</string>
++    <string name="carlink_settings_root_unavailable">O root não está disponível ou foi recusado, então o modo root continua desligado.</string>
++    <string name="carlink_settings_external_bt">Sem fio pelo módulo Bluetooth da multimídia (experimental)</string>
++    <string name="carlink_settings_external_bt_detail">O Bluetooth desta multimídia é um módulo separado. Ligue para o Android Auto sem fio alcançar seu celular por ele. Ainda não testado numa multimídia real; o USB continua funcionando. Vale a partir da próxima conexão.</string>
++    <string name="carlink_settings_external_bt_fyt_note">Antes, desative o app “Car Link” da própria multimídia (com.syu.carlink) em Configurações do Android › Apps.</string>
++    <string name="carlink_settings_method">Método de conexão</string>
++    <string name="carlink_settings_method_detail">Como o celular e o carro compartilham o Wi-Fi</string>
++    <string name="carlink_settings_method_auto">Automático</string>
++    <string name="carlink_settings_method_same_wifi">Mesmo Wi-Fi</string>
++    <string name="carlink_settings_method_hotspot">Hotspot do carro</string>
++    <string name="carlink_settings_method_direct">Wi-Fi Direct</string>
++    <string name="carlink_settings_method_auto_detail">Escolhe o melhor caminho antes de cada conexão: mesmo Wi-Fi, depois o hotspot do carro, depois o Wi-Fi Direct.</string>
++    <string name="carlink_settings_method_same_wifi_detail">Celular e carro no mesmo roteador, o caminho mais rápido. Precisa da senha do Wi-Fi uma vez.</string>
++    <string name="carlink_settings_method_hotspot_detail">O celular entra no hotspot Wi-Fi que o carro cria. Funciona com qualquer celular.</string>
++    <string name="carlink_settings_method_direct_detail">Uma conexão direta entre o celular e o carro. Não precisa de rede.</string>
++    <string name="carlink_settings_method_sheet_body">O Bluetooth sempre inicia a conexão; depois a imagem e o som vão pelo Wi-Fi.</string>
++
++    <string name="carlink_settings_hotspot">Hotspot do carro</string>
++    <string name="carlink_settings_hotspot_detail">Nome e senha do hotspot do próprio carro</string>
++    <string name="carlink_settings_hotspot_sheet_body">O CarLink lê esses dados do carro quando pode e os passa para o seu celular. Mude-os aqui e o CarLink muda também o hotspot do carro, quando o Android permite.</string>
++    <string name="carlink_settings_hotspot_read">Ler do carro</string>
++    <string name="carlink_settings_hotspot_reading">Lendo o hotspot do carro…</string>
++    <string name="carlink_settings_hotspot_unreadable">Esta multimídia não deixa o CarLink ler o hotspot dela. Digite o nome e a senha exatamente como aparecem nas configurações de hotspot do carro.</string>
++    <string name="carlink_settings_hotspot_applied">O hotspot do carro agora usa este nome e esta senha</string>
++    <string name="carlink_settings_hotspot_not_applied">Salvo no CarLink. Esta multimídia não deixa o CarLink mudar o hotspot dela: defina o mesmo nome e a mesma senha nas configurações de hotspot do carro.</string>
++    <string name="carlink_settings_same_wifi">Mesma rede Wi-Fi</string>
++    <string name="carlink_settings_same_wifi_detail">O roteador em que o carro e o iPhone entram</string>
++    <string name="carlink_settings_same_wifi_sheet_body">O carro já precisa estar neste Wi-Fi. O CarLink pede pelo Bluetooth para o iPhone entrar nele.</string>
++    <string name="carlink_settings_wifi_name">Nome da rede</string>
++    <string name="carlink_settings_wifi_password">Senha</string>
++    <string name="carlink_settings_wifi_name_error">Digite um nome de até 32 caracteres</string>
++    <string name="carlink_settings_wifi_password_error">Use de 8 a 63 caracteres, ou deixe vazio para uma rede aberta</string>
++    <string name="carlink_settings_wifi_show">Mostrar</string>
++    <string name="carlink_settings_wifi_hide">Ocultar</string>
++    <string name="carlink_settings_wifi_save">Salvar</string>
++    <string name="carlink_settings_wifi_forget">Esquecer</string>
++    <string name="carlink_settings_wifi_use_current">Usar “%1$s”</string>
++
++    <string name="carlink_settings_group_phones">Celulares e permissões</string>
++    <string name="carlink_settings_bluetooth">Parear um celular</string>
++    <string name="carlink_settings_bluetooth_detail">Abre as configurações de Bluetooth do Android</string>
++    <string name="carlink_settings_permissions">Permissões do app</string>
++    <string name="carlink_settings_permissions_detail">Veja o que o CarLink tem permissão para usar</string>
++
++    <!-- Display -->
++    <string name="carlink_settings_group_projection">CarPlay e Android Auto</string>
++    <string name="carlink_settings_picture">Imagem</string>
++    <string name="carlink_settings_picture_detail">Nitidez e fluidez da imagem</string>
++    <string name="carlink_settings_picture_auto">Automática</string>
++    <string name="carlink_settings_picture_best">Máxima</string>
++    <string name="carlink_settings_picture_balanced">Equilibrada</string>
++    <string name="carlink_settings_picture_light">Leve</string>
++    <string name="carlink_settings_picture_auto_detail">Recomendada para esta multimídia</string>
++    <string name="carlink_settings_picture_best_detail">A mais nítida, a 60 quadros por segundo. Precisa de uma multimídia rápida.</string>
++    <string name="carlink_settings_picture_balanced_detail">Nítida a 30 quadros por segundo. Melhor para multimídias mais antigas.</string>
++    <string name="carlink_settings_picture_light_detail">Resolução menor, para Wi-Fi lento ou hardware antigo.</string>
++    <string name="carlink_settings_interface_size">Tamanho da interface</string>
++    <string name="carlink_settings_interface_size_detail">Tamanho dos ícones e textos no CarPlay e no Android Auto</string>
++    <string name="carlink_settings_size_small">Pequeno</string>
++    <string name="carlink_settings_size_medium">Médio</string>
++    <string name="carlink_settings_size_large">Grande</string>
++    <string name="carlink_settings_size_default">Padrão</string>
++    <string name="carlink_settings_size_extra_large">Extra grande</string>
++    <string name="carlink_settings_size_small_detail">Cabe mais coisa na tela</string>
++    <string name="carlink_settings_size_medium_detail">Recomendado</string>
++    <string name="carlink_settings_size_large_detail">Mais fácil de ler e tocar</string>
++    <string name="carlink_settings_daynight">Dia e noite</string>
++    <string name="carlink_settings_daynight_detail">Quando os mapas e as telas escurecem</string>
++    <string name="carlink_settings_daynight_auto">Automático</string>
++    <string name="carlink_settings_daynight_day">Dia</string>
++    <string name="carlink_settings_daynight_night">Noite</string>
++    <string name="carlink_settings_daynight_schedule">Programado</string>
++    <string name="carlink_settings_daynight_auto_detail">Segue o carro e o pôr do sol</string>
++    <string name="carlink_settings_daynight_day_detail">Sempre claro</string>
++    <string name="carlink_settings_daynight_night_detail">Sempre escuro</string>
++    <string name="carlink_settings_daynight_schedule_detail">Escuro entre dois horários que você escolhe</string>
++    <string name="carlink_settings_night_start">A noite começa</string>
++    <string name="carlink_settings_night_end">A noite termina</string>
++    <string name="carlink_settings_time_earlier">15 min mais cedo</string>
++    <string name="carlink_settings_time_later">15 min mais tarde</string>
++
++    <!-- Sound -->
++    <string name="carlink_settings_group_sound">Som</string>
++    <string name="carlink_settings_sound">O som toca</string>
++    <string name="carlink_settings_sound_detail">Onde tocam a música, as instruções de rota e as ligações</string>
++    <string name="carlink_settings_sound_carlink">Pelo CarLink</string>
++    <string name="carlink_settings_sound_bluetooth">Pelo Bluetooth do carro</string>
++    <string name="carlink_settings_sound_carlink_detail">A multimídia toca todo o som. Recomendado.</string>
++    <string name="carlink_settings_sound_bluetooth_detail">A música vai pelo áudio Bluetooth do próprio carro.</string>
++
++    <!-- Navigation -->
++    <string name="carlink_settings_group_location">Localização</string>
++    <string name="carlink_settings_location">Enviar a localização do carro</string>
++    <string name="carlink_settings_location_detail">Compartilha o GPS do carro com o celular para rotas mais estáveis</string>
++    <string name="carlink_settings_byd">Rotas no HUD e no painel</string>
++    <string name="carlink_settings_byd_detail">Mostra a próxima curva no painel de instrumentos e no head-up display do BYD</string>
++
++    <!-- Car -->
++    <string name="carlink_settings_group_car">Seu carro</string>
++    <string name="carlink_settings_driving_side">Lado do volante</string>
++    <string name="carlink_settings_driving_side_detail">Mantém os controles do CarPlay e do Android Auto perto do motorista</string>
++    <string name="carlink_settings_drive_left">Volante à esquerda</string>
++    <string name="carlink_settings_drive_right">Volante à direita</string>
++    <string name="carlink_settings_drive_left_detail">Volante do lado esquerdo</string>
++    <string name="carlink_settings_drive_right_detail">Volante do lado direito</string>
++
++    <!-- General -->
++    <string name="carlink_settings_group_carlink">CarLink</string>
++    <string name="carlink_settings_appearance">Aparência</string>
++    <string name="carlink_settings_appearance_detail">Cores das telas do próprio CarLink</string>
++    <string name="carlink_settings_appearance_follow">Seguir o carro</string>
++    <string name="carlink_settings_appearance_dark">Escuro</string>
++    <string name="carlink_settings_appearance_light">Claro</string>
++    <string name="carlink_settings_appearance_follow_detail">Escuro à noite, claro de dia</string>
++    <string name="carlink_settings_appearance_dark_detail">Grafite, mais confortável à noite</string>
++    <string name="carlink_settings_appearance_light_detail">Grafite claro e quente</string>
++    <string name="carlink_settings_layout">Layout</string>
++    <string name="carlink_settings_layout_detail">Controles do tamanho de carro ou de celular</string>
++    <string name="carlink_settings_layout_auto">Automático</string>
++    <string name="carlink_settings_layout_car">Carro</string>
++    <string name="carlink_settings_layout_handheld">Celular ou tablet</string>
++    <string name="carlink_settings_layout_auto_detail">Escolhe o tamanho certo para este aparelho</string>
++    <string name="carlink_settings_layout_car_detail">Botões grandes para uma multimídia</string>
++    <string name="carlink_settings_layout_handheld_detail">Tamanhos padrão do Android</string>
++    <string name="carlink_settings_rendering">Efeitos visuais</string>
++    <string name="carlink_settings_rendering_detail">Luz, brilho e animação nas telas do CarLink</string>
++    <string name="carlink_settings_rendering_auto">Automático</string>
++    <string name="carlink_settings_rendering_full">Completo</string>
++    <string name="carlink_settings_rendering_lite">Leve</string>
++    <string name="carlink_settings_rendering_auto_value">Automático · %1$s</string>
++    <string name="carlink_settings_rendering_auto_detail_lite">Leve neste aparelho, que tem pouca memória ou processador fraco</string>
++    <string name="carlink_settings_rendering_auto_detail_full">Completo neste aparelho</string>
++    <string name="carlink_settings_rendering_full_detail">Luz suave, brilho, granulado e animação fluida</string>
++    <string name="carlink_settings_rendering_lite_detail">Preenchimentos simples e menos redesenhos, para multimídias mais lentas. Mesmo layout e mesmas cores</string>
++    <string name="carlink_settings_carlink_size">Tamanho do texto do CarLink</string>
++    <string name="carlink_settings_carlink_size_detail">Tamanho das telas do próprio CarLink</string>
++    <string name="carlink_settings_group_help">Ajuda</string>
++    <string name="carlink_settings_diagnostics">Diagnóstico</string>
++    <string name="carlink_settings_diagnostics_detail">Verificações e detalhes da conexão ao vivo</string>
++    <string name="carlink_settings_group_about">Sobre</string>
++    <string name="carlink_settings_version">Versão</string>
++    <plurals name="carlink_settings_lab_taps">
++        <item quantity="one">Toque mais uma vez para mostrar o Lab</item>
++        <item quantity="many">Toque mais %1$d vezes para mostrar o Lab</item>
++        <item quantity="other">Toque mais %1$d vezes para mostrar o Lab</item>
++    </plurals>
++    <string name="carlink_settings_lab_toggle">Mostrar as configurações do Lab</string>
++    <string name="carlink_settings_lab_toggle_detail">Opções experimentais e de depuração, com moldura âmbar</string>
++    <string name="carlink_settings_about_open">Sobre o CarLink</string>
++
++    <!-- Advanced and Lab -->
++    <string name="carlink_settings_advanced">Avançado</string>
++    <string name="carlink_settings_advanced_detail">Configurações dos motores para usuários experientes. Mudar aqui um valor de imagem ou tamanho deixa a configuração correspondente acima como Personalizado.</string>
++    <string name="carlink_settings_lab">Lab</string>
++    <string name="carlink_settings_lab_detail">Opções experimentais e de depuração. Se uma conexão parar de funcionar, desligue-as primeiro.</string>
++    <string name="carlink_settings_floating_switcher">Seletor flutuante</string>
++    <string name="carlink_settings_floating_switcher_detail">Um botão pequeno sobre o CarPlay e o Android Auto para trocar de celular, abrir o CarLink ou desconectar</string>
++    <string name="carlink_settings_floating_switcher_permission">Permitir sobrepor a outros apps</string>
++    <string name="carlink_settings_floating_switcher_permission_detail">O Android exige isso para o CarLink mostrar o botão</string>
++    <!-- Settings › Car › Car brand (core settings/CarBrand), also the setup's car step. Brand names come from CarBrand.displayName. -->
++    <string name="carlink_settings_car_brand">Marca do carro</string>
++    <string name="carlink_settings_car_brand_detail">BYD acrescenta os extras do DiLink; as outras marcas só identificam o carro</string>
++    <string name="carlink_settings_car_brand_sheet_body">Escolha a marca deste carro. O CarPlay e o Android Auto funcionam igual em qualquer carro.</string>
++    <!-- What the detection found: a generic screen, or a BYD DiLink unit. -->
++    <string name="carlink_settings_car_generic">Genérico</string>
++    <string name="carlink_settings_car_byd">BYD (DiLink)</string>
++    <string name="carlink_settings_car_detected">Detectado: %1$s</string>
++    <!-- The car brand when the driver never chose one and the screen is not a BYD. -->
++    <string name="carlink_settings_car_not_chosen">Outra / Genérico</string>
++    <string name="carlink_settings_car_other">Outra / não está na lista</string>
++    <string name="carlink_settings_car_popular">Populares na Índia</string>
++    <string name="carlink_settings_car_luxury">Luxo</string>
++    <string name="carlink_settings_car_motorcycles">Motos</string>
++    <string name="carlink_settings_car_byd_extras">Extras do DiLink</string>
++    <string name="carlink_settings_car_explain_byd">O BYD acrescenta os extras do DiLink: rotas no HUD e no painel de instrumentos, e os botões do volante do BYD.</string>
++    <string name="carlink_settings_car_explain_other">O CarPlay e o Android Auto funcionam igual a qualquer carro. A marca só identifica este carro no CarLink.</string>
++    <!-- Settings › Car › Steering-wheel buttons (core settings/WheelKeys). -->
++    <string name="carlink_wheel_keys">Botões do volante</string>
++    <string name="carlink_wheel_keys_detail">Ensine ao CarLink os botões do seu volante para voz, ligações e música no CarPlay e no Android Auto</string>
++    <plurals name="carlink_wheel_keys_value">
++        <item quantity="one">%d definido</item>
++        <item quantity="many">%d definidos</item>
++        <item quantity="other">%d definidos</item>
++    </plurals>
++    <string name="carlink_wheel_keys_sheet_body">Toque em Aprender e aperte o botão no volante. Botões que a multimídia guarda para si nunca chegam ao CarLink e não podem ser aprendidos.</string>
++    <string name="carlink_wheel_action_voice">Assistente de voz</string>
++    <string name="carlink_wheel_action_voice_detail">Siri ou Google Assistente</string>
++    <string name="carlink_wheel_action_answer">Atender ligação</string>
++    <string name="carlink_wheel_action_hang_up">Desligar</string>
++    <string name="carlink_wheel_action_play_pause">Tocar / Pausar</string>
++    <string name="carlink_wheel_action_next">Próxima</string>
++    <string name="carlink_wheel_action_previous">Anterior</string>
++    <!-- The learned key: its Android name and code, e.g. "MEDIA_NEXT · 87". -->
++    <string name="carlink_wheel_key_value">%1$s · %2$d</string>
++    <string name="carlink_wheel_key_unnamed">Tecla %1$d</string>
++    <string name="carlink_wheel_key_learn">Aprender</string>
++    <string name="carlink_wheel_key_reset">Redefinir tudo</string>
++    <string name="carlink_wheel_key_waiting">Aperte um botão no volante…</string>
++    <string name="carlink_wheel_key_waiting_for">Para: %1$s</string>
++    <plurals name="carlink_wheel_key_seconds">
++        <item quantity="one">Aguardando %d segundo</item>
++        <item quantity="many">Aguardando %d segundos</item>
++        <item quantity="other">Aguardando %d segundos</item>
++    </plurals>
++    <string name="carlink_wheel_key_waiting_note">Os botões de volume, Voltar e Início não podem ser usados.</string>
++    <string name="carlink_wheel_key_timed_out">Nenhum botão chegou. A multimídia pode guardar esse para si.</string>
++    <string name="carlink_wheel_key_cancel">Cancelar</string>
++    <string name="carlink_settings_setup_again">Configurar de novo</string>
++    <string name="carlink_settings_setup_again_detail">Permissões, marca do carro e pareamento do celular, passo a passo</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_setup.xml b/app/src/main/res/values-pt-rBR/carlink_strings_setup.xml
+new file mode 100644
+index 0000000..a843780
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_setup.xml
+@@ -0,0 +1,118 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- First-time setup (ui/setup): welcome, permissions, car brand, pairing a phone, done. -->
++<resources>
++    <string name="carlink_setup_title">Configurar o CarLink</string>
++    <string name="carlink_setup_close">Pular configuração</string>
++    <string name="carlink_setup_back">Voltar</string>
++    <string name="carlink_setup_continue">Continuar</string>
++    <string name="carlink_setup_step_of">Etapa %1$d de %2$d</string>
++    <string name="carlink_setup_step_welcome">Boas-vindas</string>
++    <string name="carlink_setup_step_permissions">Acesso</string>
++    <string name="carlink_setup_step_car">Carro</string>
++    <string name="carlink_setup_step_pair">Celular</string>
++    <string name="carlink_setup_step_done">Pronto</string>
++
++    <!-- Welcome -->
++    <string name="carlink_setup_welcome_eyebrow">Boas-vindas</string>
++    <string name="carlink_setup_welcome_title">Vamos conectar seu celular</string>
++    <string name="carlink_setup_welcome_body">O CarLink roda o Apple CarPlay para iPhone e o Android Auto para celulares Android, por cabo ou sem fio. A configuração leva uns dois minutos.</string>
++    <string name="carlink_setup_welcome_start">Começar</string>
++    <string name="carlink_setup_plan_access">Permitir acesso</string>
++    <string name="carlink_setup_plan_access_detail">Bluetooth, Wi-Fi e algumas opções, tudo de uma vez</string>
++    <string name="carlink_setup_plan_car">Escolher o carro</string>
++    <string name="carlink_setup_plan_car_detail">A marca dele; um BYD ganha os extras do DiLink</string>
++    <string name="carlink_setup_plan_pair">Parear o celular</string>
++    <string name="carlink_setup_plan_pair_detail">Uma vez, pelas configurações de Bluetooth do celular</string>
++
++    <!-- Permissions -->
++    <string name="carlink_setup_permissions_eyebrow">Acesso</string>
++    <string name="carlink_setup_permissions_title">Permita o que o CarLink precisa</string>
++    <string name="carlink_setup_permissions_body">O Android pede cada uma só uma vez. Permita as recomendadas agora para nada pedir enquanto você dirige; as opcionais podem esperar.</string>
++    <string name="carlink_setup_permissions_all">Permitir tudo</string>
++    <string name="carlink_setup_permissions_done">Tudo o que é necessário está permitido</string>
++    <string name="carlink_setup_permissions_missing">Faltam %1$d para permitir</string>
++    <string name="carlink_setup_permission_allowed">Permitido</string>
++    <string name="carlink_setup_permission_allow">Permitir</string>
++    <string name="carlink_setup_permission_optional">Opcional</string>
++    <string name="carlink_setup_permission_recommended">Recomendado</string>
++    <string name="carlink_setup_perm_bluetooth">Bluetooth</string>
++    <string name="carlink_setup_perm_bluetooth_detail">Encontra e pareia seu celular, e o acorda para o modo sem fio</string>
++    <string name="carlink_setup_perm_wifi">Dispositivos Wi-Fi por perto</string>
++    <string name="carlink_setup_perm_wifi_detail">Cria a conexão Wi-Fi privada com o celular</string>
++    <string name="carlink_setup_perm_location">Localização</string>
++    <string name="carlink_setup_perm_location_detail">O Android exige para o Wi-Fi Direct; os mapas recebem a posição do carro</string>
++    <string name="carlink_setup_perm_local_network">Rede local</string>
++    <string name="carlink_setup_perm_local_network_detail">Permite que o CarPlay sem fio alcance o iPhone</string>
++    <string name="carlink_setup_perm_microphone">Microfone</string>
++    <string name="carlink_setup_perm_microphone_detail">Siri, Google Assistente e ligações</string>
++    <string name="carlink_setup_perm_notifications">Notificações</string>
++    <string name="carlink_setup_perm_notifications_detail">Mostra que o CarLink está conectado e permite pará-lo</string>
++    <string name="carlink_setup_perm_overlay">Sobrepor a outros apps</string>
++    <string name="carlink_setup_perm_overlay_detail">Permite que o CarLink abra sozinho quando o celular conecta</string>
++    <string name="carlink_setup_perm_battery">Executar em segundo plano</string>
++    <string name="carlink_setup_perm_battery_detail">Mantém a conexão quando a tela apaga</string>
++    <string name="carlink_setup_perm_vpn">Conexão do CarPlay por cabo</string>
++    <string name="carlink_setup_perm_vpn_detail">Permite que o CarPlay funcione pelo cabo USB. Nada vai para a internet por ela</string>
++
++    <!-- Car -->
++    <string name="carlink_setup_car_eyebrow">Seu carro</string>
++    <string name="carlink_setup_car_title">Em qual carro está esta tela?</string>
++    <string name="carlink_setup_car_body">Escolha a marca. Dá para mudar depois em Configurações › Carro.</string>
++
++    <!-- Pair a phone -->
++    <string name="carlink_setup_pair_eyebrow">Parear o celular</string>
++    <string name="carlink_setup_pair_waiting_title">No celular, abra o Bluetooth e toque em %1$s</string>
++    <string name="carlink_setup_pair_waiting_title_unnamed">No celular, abra o Bluetooth e toque no nome desta tela</string>
++    <string name="carlink_setup_pair_waiting_body">Mantenha esta tela aberta. Se o celular mostrar um código, confira se é igual ao daqui e toque em Parear.</string>
++    <string name="carlink_setup_pair_pairing_title">Pareando com %1$s…</string>
++    <string name="carlink_setup_pair_pairing_title_unnamed">Pareando com seu celular…</string>
++    <string name="carlink_setup_pair_pairing_body">Confirme o código no celular e nesta tela.</string>
++    <string name="carlink_setup_pair_found_iphone">iPhone encontrado → CarPlay</string>
++    <string name="carlink_setup_pair_found_android">Celular Android encontrado → Android Auto</string>
++    <string name="carlink_setup_pair_found">Celular encontrado</string>
++    <string name="carlink_setup_pair_accept_iphone">Aceite “Usar o CarPlay” no iPhone</string>
++    <string name="carlink_setup_pair_accept_iphone_body">Mantenha o %1$s desbloqueado. A primeira conexão pode levar até meio minuto.</string>
++    <string name="carlink_setup_pair_accept_android">Aceite o Android Auto no celular</string>
++    <string name="carlink_setup_pair_accept_android_body">Siga as telas do Android Auto no %1$s e mantenha-o desbloqueado.</string>
++    <string name="carlink_setup_pair_kind_title">%1$s está pareado</string>
++    <string name="carlink_setup_pair_kind_body">É um iPhone ou um celular Android?</string>
++    <string name="carlink_setup_pair_connected_title">%1$s está conectado</string>
++    <string name="carlink_setup_pair_connected_body">O %1$s está rodando. Da próxima vez ele começa sozinho.</string>
++    <string name="carlink_setup_pair_failed_title">Ainda não conectado</string>
++    <string name="carlink_setup_pair_failed_body">O celular está pareado. Desbloqueie-o, confira se o Bluetooth e o Wi-Fi estão ligados e tente de novo.</string>
++    <string name="carlink_setup_pair_bt_off_title">Ligue o Bluetooth</string>
++    <string name="carlink_setup_pair_bt_off_body">Os celulares encontram esta tela pelo Bluetooth. Ligue-o para parear.</string>
++    <string name="carlink_setup_pair_bt_on">Ligar o Bluetooth</string>
++    <string name="carlink_setup_pair_cable">Conectar por cabo</string>
++    <string name="carlink_setup_pair_other">Usar outro celular</string>
++    <!-- Pairing step on a stereo whose Bluetooth is an external module apps cannot use. -->
++    <string name="carlink_setup_pair_external_bt">O modo sem fio ainda não está disponível nesta multimídia. Conecte o celular com um cabo USB — funciona do mesmo jeito.</string>
++    <string name="carlink_setup_pair_wireless">Parear pelo Bluetooth</string>
++    <string name="carlink_setup_pair_skip">Pular</string>
++    <string name="carlink_setup_pair_cable_title">Conecte o celular nesta tela</string>
++    <string name="carlink_setup_pair_cable_body">Use o cabo de carregar do celular na porta USB desta tela. Desbloqueie o celular; o CarLink começa sozinho.</string>
++    <!-- Shown before and while plugging in: the two one-time prompts of the first cable connection. -->
++    <string name="carlink_setup_pair_cable_prompts">Ao conectar, o Android pede uma vez para permitir o CarLink — marque “Sempre abrir o CarLink” — e o iPhone pede para Confiar nesta tela.</string>
++    <string name="carlink_setup_pair_cable_waiting">Aguardando um celular no cabo…</string>
++    <string name="carlink_setup_pair_name_label">Nome Bluetooth desta tela</string>
++    <string name="carlink_setup_pair_name_unknown">Ligue o Bluetooth para ver</string>
++    <string name="carlink_setup_pair_visible">Visível para celulares</string>
++    <string name="carlink_setup_pair_not_visible">Ainda não visível para novos celulares</string>
++    <string name="carlink_setup_pair_make_visible">Tornar visível</string>
++    <string name="carlink_setup_pair_known">Pareado antes</string>
++    <string name="carlink_setup_pair_connect_known">Conectar %1$s</string>
++
++    <!-- Done -->
++    <string name="carlink_setup_done_eyebrow">Pronto</string>
++    <string name="carlink_setup_done_title">Tudo certo</string>
++    <string name="carlink_setup_done_body_phone">Da próxima vez é só entrar no carro: o %1$s conecta sozinho quando estiver perto desta tela, ou quando você plugar o cabo.</string>
++    <string name="carlink_setup_done_body_none">Conecte o celular no cabo, ou pareie pelo Início quando quiser.</string>
++    <string name="carlink_setup_done_action">Ir para o Início</string>
++    <string name="carlink_setup_done_phone">Celular</string>
++    <string name="carlink_setup_done_phone_none">Ainda não pareado</string>
++    <string name="carlink_setup_done_car">Carro</string>
++    <string name="carlink_setup_done_access">Acesso</string>
++    <string name="carlink_setup_done_access_all">Tudo permitido</string>
++    <string name="carlink_setup_done_access_missing">%1$d ainda não permitidas</string>
++    <string name="carlink_setup_done_phone_value">%1$s · %2$s</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_switcher.xml b/app/src/main/res/values-pt-rBR/carlink_strings_switcher.xml
+new file mode 100644
+index 0000000..932c4f2
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_switcher.xml
+@@ -0,0 +1,20 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Floating switcher: the bubble over CarPlay / Android Auto and the panel it opens. -->
++    <string name="carlink_switcher_bubble">Seletor do CarLink</string>
++    <string name="carlink_switcher_bubble_action">Abrir o seletor de celular</string>
++    <!-- %1$s: time connected, e.g. 12:04 -->
++    <string name="carlink_switcher_connected_for">Conectado · %1$s</string>
++    <string name="carlink_switcher_switch_title">Trocar de celular</string>
++    <string name="carlink_switcher_no_phones">Nenhum outro celular pareado</string>
++    <string name="carlink_switcher_no_phones_hint">Pareie outro celular nas configurações de Bluetooth para trocar para ele aqui.</string>
++    <string name="carlink_switcher_switching">Trocando…</string>
++    <string name="carlink_switcher_home">Início do CarLink</string>
++    <string name="carlink_switcher_next_connection">A sessão atual mantém a conexão.</string>
++    <string name="carlink_switcher_close">Fechar</string>
++    <string name="carlink_switcher_back">Voltar</string>
++    <!-- The USB switch prompt's decline button ("Switch to <phone>?"). -->
++    <string name="carlink_switcher_not_now">Agora não</string>
++    <!-- Name of a plugged-in phone that did not report one. -->
++    <string name="carlink_switcher_phone_fallback">o novo celular</string>
++</resources>
+diff --git a/app/src/main/res/values-pt-rBR/carlink_strings_update.xml b/app/src/main/res/values-pt-rBR/carlink_strings_update.xml
+new file mode 100644
+index 0000000..3c7ac96
+--- /dev/null
++++ b/app/src/main/res/values-pt-rBR/carlink_strings_update.xml
+@@ -0,0 +1,65 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- ===== Update dialog (ui/update/UpdateDialog.kt) ===== -->
++    <string name="carlink_update_available_title">Atualização disponível</string>
++    <!-- The new version, e.g. "CarLink 1.1.0". -->
++    <string name="carlink_update_version">CarLink %1$s</string>
++    <!-- The installed version, e.g. "You have 1.0.0". -->
++    <string name="carlink_update_installed">Você tem a %1$s</string>
++    <string name="carlink_update_whats_new">Novidades</string>
++    <string name="carlink_update_no_notes">Sem notas de versão para esta versão.</string>
++    <string name="carlink_update_ignore">Ignorar esta versão</string>
++    <string name="carlink_update_later">Depois</string>
++    <string name="carlink_update_download">Baixar e instalar</string>
++
++    <!-- e.g. "Downloading CarLink 1.1.0". -->
++    <string name="carlink_update_downloading_title">Baixando o CarLink %1$s</string>
++    <!-- Downloaded so far and the total, e.g. "12.4 MB of 48.0 MB". -->
++    <string name="carlink_update_progress">%1$s de %2$s</string>
++    <string name="carlink_update_progress_unknown">%1$s baixados</string>
++    <string name="carlink_update_download_body">Você pode continuar usando o CarLink. Nada é instalado antes de o download ser verificado.</string>
++    <string name="carlink_update_cancel">Cancelar</string>
++
++    <string name="carlink_update_verifying_title">Verificando o download</string>
++    <string name="carlink_update_verifying_body">Conferindo se o arquivo está completo e assinado pelo CarLink.</string>
++
++    <string name="carlink_update_permission_title">Permita que o CarLink instale a atualização</string>
++    <string name="carlink_update_permission_body">O Android precisa da sua permissão uma vez. Na próxima tela, ative “Permitir desta fonte” e volte para o CarLink. A atualização continua sozinha.</string>
++    <string name="carlink_update_open_settings">Abrir configurações</string>
++
++    <!-- e.g. "Installing CarLink 1.1.0". -->
++    <string name="carlink_update_installing_title">Instalando o CarLink %1$s</string>
++    <string name="carlink_update_installing_body">Confirme na tela de instalação do Android. O CarLink fecha durante a atualização; abra de novo quando terminar.</string>
++
++    <string name="carlink_update_failed_title">Atualização não instalada</string>
++    <string name="carlink_update_error_download">O download não terminou. Verifique a conexão com a internet e tente de novo.</string>
++    <string name="carlink_update_error_checksum_missing">Esta versão não tem arquivo de checksum, então o download não pode ser verificado. Tente mais tarde.</string>
++    <string name="carlink_update_error_checksum">O arquivo baixado não confere com o checksum e pode estar corrompido. Ele foi apagado.</string>
++    <string name="carlink_update_error_unreadable">O arquivo baixado não é um app válido. Ele foi apagado.</string>
++    <string name="carlink_update_error_package">O arquivo baixado não é o CarLink. Ele foi apagado.</string>
++    <string name="carlink_update_error_not_newer">O arquivo baixado não é mais novo que a versão instalada. Ele foi apagado.</string>
++    <string name="carlink_update_error_signer">O arquivo baixado não está assinado com a chave oficial do CarLink, então não foi instalado. Ele foi apagado.</string>
++    <string name="carlink_update_error_install">O Android não instalou a atualização. Tente de novo.</string>
++    <!-- Android's own reason, e.g. "INSTALL_FAILED_INSUFFICIENT_STORAGE". -->
++    <string name="carlink_update_error_install_detail">O Android não instalou a atualização (%1$s). Tente de novo.</string>
++    <string name="carlink_update_error_install_cancelled">A instalação foi cancelada.</string>
++    <string name="carlink_update_try_again">Tentar de novo</string>
++    <string name="carlink_update_close">Fechar</string>
++
++    <!-- ===== About › Updates ===== -->
++    <string name="carlink_about_updates">Atualizações</string>
++    <string name="carlink_about_check_updates">Procurar atualizações</string>
++    <!-- e.g. "Version 1.0.0 · last checked 2 hours ago". -->
++    <string name="carlink_about_updates_last_checked">Versão %1$s · última verificação %2$s</string>
++    <string name="carlink_about_updates_never">Versão %1$s · ainda não verificada</string>
++    <string name="carlink_about_updates_checking">Verificando…</string>
++    <string name="carlink_about_updates_just_now">agora mesmo</string>
++    <string name="carlink_about_updates_up_to_date">Você está com a versão mais recente</string>
++    <!-- e.g. "CarLink 1.1.0 is available". -->
++    <string name="carlink_about_updates_available">CarLink %1$s disponível</string>
++    <string name="carlink_about_updates_failed">Não foi possível acessar o GitHub. Verifique a conexão com a internet e tente de novo.</string>
++    <string name="carlink_about_updates_rate_limited">O GitHub está ocupado agora. Tente daqui a pouco.</string>
++    <string name="carlink_about_updates_unsupported">Esta versão não se atualiza sozinha. Instale a versão oficial do GitHub para receber atualizações.</string>
++    <string name="carlink_about_auto_updates">Procurar atualizações automaticamente</string>
++    <string name="carlink_about_auto_updates_body">A cada 6 horas, com o CarLink aberto e nenhum celular conectado. Nada é baixado sem perguntar.</string>
++</resources>
+diff --git a/app/src/main/res/xml/locales_config.xml b/app/src/main/res/xml/locales_config.xml
+index 9123c4c..bfac43b 100644
+--- a/app/src/main/res/xml/locales_config.xml
++++ b/app/src/main/res/xml/locales_config.xml
+@@ -1,5 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<!-- CarLink ships in English only (see androidResources.localeFilters in app/build.gradle.kts). -->
++<!-- CarLink ships in English and Brazilian Portuguese (see androidResources.localeFilters in app/build.gradle.kts). -->
+ <locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+     <locale android:name="en" />
++    <locale android:name="pt-BR" />
+ </locale-config>
+diff --git a/carlink-core/src/main/java/com/carlink/core/connection/StallPlaybook.kt b/carlink-core/src/main/java/com/carlink/core/connection/StallPlaybook.kt
+index be0e8a1..7e63668 100644
+--- a/carlink-core/src/main/java/com/carlink/core/connection/StallPlaybook.kt
++++ b/carlink-core/src/main/java/com/carlink/core/connection/StallPlaybook.kt
+@@ -62,7 +62,7 @@ object AdaptiveDeadlines {
+  *
+  * | Phase (stage)            | Wireless                                   | USB                          |
+  * |--------------------------|--------------------------------------------|------------------------------|
+- * | Waiting for the phone    | nudge, nudge, give up (did not answer)     | nudge ×3, ask for re-plug    |
++ * | Waiting for the phone    | nudge, nudge, give up (did not answer); Android Auto: nudge ×4, give up | nudge ×3, ask for re-plug |
+  * | Handshake                | retry step, next path, give up             | Android Auto: nudge, re-switch USB, ask for re-plug; CarPlay: nudge, retry step, ask for re-plug |
+  * | Linking (joining Wi-Fi)  | reset Wi-Fi Direct, next path, give up     | (none)                       |
+  * | Picture (no first frame) | retry step, next path, give up             | retry step, ask for re-plug  |
+@@ -80,6 +80,11 @@ object StallPlaybook {
+         return when (stage) {
+             ProgressStage.WAITING_FOR_PHONE, ProgressStage.PHONE_NOT_ANSWERING ->
+                 if (usb) listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.ASK_REPLUG)
++                // Wireless Android Auto gets two more nudges: on a head unit whose own stack holds
++                // the phone's hands-free link, DiAuto cycles the unit's Bluetooth at the first nudge
++                // (HandsFreeWakeEscalation) and the stack and the phone need ~15-25 s to come back.
++                else if (engine == Engine.ANDROID_AUTO) listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE,
++                    RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.GIVE_UP)
+                 else listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.GIVE_UP)
+             ProgressStage.HANDSHAKE -> when {
+                 usb && engine == Engine.ANDROID_AUTO -> listOf(RecoveryAction.NUDGE, RecoveryAction.RESWITCH_USB, RecoveryAction.ASK_REPLUG)
+diff --git a/carlink-core/src/test/java/com/carlink/core/connection/StallPlaybookTest.kt b/carlink-core/src/test/java/com/carlink/core/connection/StallPlaybookTest.kt
+index af47447..7aad5aa 100644
+--- a/carlink-core/src/test/java/com/carlink/core/connection/StallPlaybookTest.kt
++++ b/carlink-core/src/test/java/com/carlink/core/connection/StallPlaybookTest.kt
+@@ -23,8 +23,10 @@ class StallPlaybookTest {
+     }
+ 
+     @Test fun thePlaybookTable() {
+-        assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.GIVE_UP),
++        assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.GIVE_UP),
+             StallPlaybook.actions(Engine.ANDROID_AUTO, wireless, ProgressStage.WAITING_FOR_PHONE))
++        assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.GIVE_UP),
++            StallPlaybook.actions(Engine.CARPLAY, wireless, ProgressStage.WAITING_FOR_PHONE))
+         assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.NUDGE, RecoveryAction.ASK_REPLUG),
+             StallPlaybook.actions(Engine.CARPLAY, usb, ProgressStage.PHONE_NOT_ANSWERING))
+         assertEquals(listOf(RecoveryAction.NUDGE, RecoveryAction.RESWITCH_USB, RecoveryAction.ASK_REPLUG),
+diff --git a/docs/VENDOR_CHANGES.md b/docs/VENDOR_CHANGES.md
+index 19e3073..e3475c4 100644
+--- a/docs/VENDOR_CHANGES.md
++++ b/docs/VENDOR_CHANGES.md
+@@ -124,6 +124,9 @@ Not built: `:mobile` (replaced by CarLink's `:app`), `:automotive`, `samples/*`.
+ | `aap/ActivityLaunchPolicy.kt` (`chooseLaunchStrategy(…, appVisible)`); `aap/AapService.kt` (`launchAapProjectionActivity` passes whether one of the app's processes has a resumed activity, and logs `Projection launch: strategy=…`); test `ActivityLaunchStrategyTest` | On Android 10+, while a CarLink screen is in front the projection opens with a direct `startActivity`, overlay permission or not; otherwise unchanged (overlay trampoline, else the full-screen notification) | Without "display over other apps" the engine only posted an "Android Auto is starting" notification, so the projection never opened, the read loop never started and the phone timed out (`USB_ACCESSORY_TO_PROJECTION_TIMEOUT`). CarLink 1.0.3 stopped blocking sessions on that permission, which exposed it. Verified on the tablet 2026-10-20: USB Android Auto connected in 3.2 s with the permission off. |
+ | `connection/HfpSlcInitiator.kt`, `connection/HfpAtResponder.kt`, `connection/HfpServiceRecordPolicy.kt` (new, each with a `// CarLink: ported from open-headunit` header) and their tests; `connection/HfpLink.kt` (new: upstream's `serveHfpSocket` loop over plain streams) and `HfpLinkTest` (the AT exchange against a fake audio gateway); `aap/BluetoothWakePolicy.kt` (`carriesServiceLevelConnection`; CarLink: `looksLikeApple`, `mayOpenHandsFreeFor`); `aap/WirelessTiming.kt` (phases `hfp-slc-start`, `hfp-slc-done`, `hfp-slc-failed`); `connection/NativeAaHandshakeManager.kt` (`serveHfp` replaces `handleHfp`; `holdPoke`; `shouldRegisterDummyHfp`, `openHfpRecord`, `shouldInitiateSlc`, `isApple`, `standingInForHfp`; `pokeDevice` returns at once in a `usbOnlySession` and for an Apple device) | Port of open-headunit c86332be ("complete the hands-free link") with c3b58e61's three tries at the stand-in record and 80057795's "always complete the stand-in link" (no setting): a wake poke that reaches the phone's HFP-AG, and a phone that dials the stand-in record, get the HFP Service Level Connection opened by the head unit (`AT+BRSF=0`, `AT+CIND=?`, `AT+CIND?`, `AT+CMER=3,0,0,1`, then `AT+CIND?` every 2 s), and the AT answers come from upstream's table (CRLF-framed, one answer per command, nothing for a non-AT line) instead of DiAuto's "OK to everything". The stand-in record is published only where the radio advertises no Hands-Free. Not ported: `HandsFreeWakeEscalationPolicy` / `NativeAaWakeDamagePolicy` / `BluetoothRadioCyclePolicy` (waking a phone whose link is already up), `wakeDecision`'s per-role reading (CarLink keeps `gatewayLinkBlocksPoke`), the setup QR. 0e2e5767 renames WPP fields only (`WifiStartRequest` field 3 is 0 either way), so nothing there. CarLink additions: the link is completed only for the session's poke target and never for an iPhone or iPad, and a USB-only session never pokes. | Android Auto 17.8 (2026-10-14) starts wireless setup only once the head unit is a *connected* hands-free device: the S25 Ultra sat at hands-free "connecting", then `waitForHeadUnitConnected timeout` → `WIRELESS_SETUP_FAILED_TO_START_NO_HFP_FROM_HU_PRESENCE` (DA§4.2; TROUBLESHOOTING). |
+ | `HostIntegration.kt` (`openCarScreen`); `aap/AapControl.kt` (`VIDEO_FOCUS_NATIVE` branch) | With the hook set, the phone's request for the car's own screen (the Exit / car tile) is answered with `VideoFocusNotification` NATIVE, the transport keeps running (no `wasUserExit`, no stop) and the hook runs while `AapProjectionActivity` is in front. Showing the projection again regains focus through the existing surface path (`onSurfaceCreated` in `TransportStarted` sends an unsolicited gain). Null keeps upstream's "user exit, stop the transport". CarLink sets it in `CarLinkApplication.brandEngines` to open Settings. | The user asked for the car tile to open CarLink's Settings with Android Auto still connected, as a real car's native screen does; Disconnect stays on Home and the floating switcher. |
++| `connection/P2pStaleGroupPolicy.kt` (new); `connection/WifiDirectManager.kt` (`removeOwnedGroup` removes an idle group that is not ours, `removeStale = false` for `stop()`'s final teardown; `onGroupInfoAvailable` waits out an idle foreign group before our create and adopts the firmware's name for our group after it), test `P2pStaleGroupPolicyTest` | A group up on the unit that is not this session's but is owned by the unit with no client on it is stale: it is removed, as open-headunit does, and the bring-up continues. A group with a phone on it, or one the unit joined as a client, is still refused (`P2P_OWNED_BY_OTHER`). | A Topway head unit (2026-10-23) failed every wireless Android Auto attempt at once with "Wi-Fi Direct is in use by another app" ("Car Wi-Fi link didn't start"), while open-headunit, which removes the old group, connected: a persistent group left by another app or an earlier session made DiAuto's ownership check refuse the whole session. |
++| `aap/HandsFreeWakeEscalation.kt` (new); `connection/NativeAaHandshakeManager.kt` (`pokeDevice`: a stand-down by `BluetoothWakePolicy.shouldPoke` is stamped per phone and, once it has lasted `ESCALATE_AFTER_MS` (6 s), the poke goes out anyway, at most `MAX_WAKES` (2) per `start()` and `COOLDOWN_MS` (15 s) apart, never during a session; budget reset in `start()`), test `HandsFreeWakeEscalationTest` | Shortened port of open-headunit c3b58e6 (`HandsFreeWakeEscalationPolicy`). Upstream waits 90 s, needs a pairing that has run Android Auto on the unit and a damage verdict, and tries a radio cycle first below API 33; CarLink keeps none of those: its sessions are the driver's request and give up after 30 s, so the first nudge (10 s) is the one that wakes. | A Topway head unit (Android 8.1, 2026-10-23) held the phone's hands-free link from its own stack before CarLink opened its Android Auto listener; every poke stood down ("already holds a Bluetooth hands-free link"), the phone never opened RFCOMM, and CarLink failed with PHONE_DID_NOT_ANSWER after 30 s. Android Auto starts wireless from a Bluetooth event, which a link that never changes does not raise. Cost (as upstream measured): the poke takes the phone's hands-free slot and the stereo's own link may stay down until it reconnects. |
++| `aap/HandsFreeWakeEscalation.kt` (`shouldCycleRadio`, `quietAfterCycle`); `connection/NativeAaHandshakeManager.kt` (`launchAaListener`: the primary AA RFCOMM server lifted out of `start()` unchanged; `cycleOwnRadio`/`awaitAdapterState`: below API 33, once per `start()`, the stand-down's first lever turns the unit's Bluetooth off and on (bounded 10 s / 20 s, `NonCancellable` so the radio is never left off), then publishes the AA record again; `pokeDevice` stays quiet while a cycle runs and for 25 s after), tests in `HandsFreeWakeEscalationTest`; `carlink-core` `StallPlaybook` (wireless Android Auto waits for the phone with four nudges instead of two, 50 s instead of 30 s) | Port of open-headunit's radio cycle (`BluetoothRadioCyclePolicy`, `cycleOwnRadio`), without its 90 s wait, its pairing gate and its stored verdict; the cycle comes before the escalated wake, as upstream orders them. | The same Topway (2026-10-23, second log): the escalated wake went out and the phone answered both pokes (HFP-AG, HSP-AG), but on a radio with its own hands-free stack DiAuto holds the poke silently, and Android Auto 17.8 waits ~4.5 s for a connected hands-free profile and gives up, so it still never opened the Android Auto channel. A cycle lets the stereo's own stack reconnect hands-free for real, which gives the phone both the event and the connected profile. |
+ 
+ ## Engine wording changed only through CarLink's resources
+ 
+diff --git a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalation.kt b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalation.kt
+new file mode 100644
+index 0000000..bb3413e
+--- /dev/null
++++ b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalation.kt
+@@ -0,0 +1,87 @@
++// CarLink: new file, after open-headunit c3b58e6 (HandsFreeWakeEscalationPolicy); see docs/VENDOR_CHANGES.md.
++package com.andrerinas.openheadunit.aap
++
++/**
++ * Whether a wake poke that [BluetoothWakePolicy.shouldPoke] stood down (this head unit already
++ * holds a hands-free link) may go out anyway.
++ *
++ * Android Auto starts wireless setup from a Bluetooth *event* (ACL connected, hands-free connection
++ * state changed), not from a connected state. A car head unit whose own stack connected hands-free
++ * long before CarLink opened its Android Auto listener raises no further event, so the phone never
++ * opens the Android Auto channel: seen on a Topway head unit (Android 8.1), where the phone joined
++ * the Wi-Fi Direct group again and again but never opened RFCOMM, and CarLink gave up after 30 s.
++ *
++ * open-headunit waits 90 s and needs a pairing that has run Android Auto before. In CarLink every
++ * session is one the driver asked for (Connect, Try again, or CarLink's own reconnect of the last
++ * Android Auto phone) and CarLink gives up after 30 s, so the wait is [ESCALATE_AFTER_MS], just
++ * before CarLink's first nudge, and the budget is [MAX_WAKES] per handshake-server start. The cost
++ * is the one upstream measured: the poke takes the phone's hands-free slot, and the head unit's own
++ * link may stay down until the phone or the stereo reconnects it.
++ *
++ * A poke cannot finish the job where the stereo has a hands-free stack of its own: DiAuto then holds
++ * the poke silently (it must not compete with the real stack), and Android Auto 17.8 waits ~4.5 s
++ * for a *connected* hands-free profile and gives up (seen on the same Topway: HFP-AG and HSP-AG
++ * pokes answered, no Android Auto channel). So below API 33, where `BluetoothAdapter.disable()`
++ * still works for an app, the first lever is open-headunit's radio cycle (`BluetoothRadioCyclePolicy`,
++ * 506bd59/c3b58e6): the unit's Bluetooth goes off and on, its own stack reconnects hands-free with a
++ * real Service Level Connection, and the phone sees the event *and* the connected profile. Once per
++ * start; pokes then stay quiet for [POST_CYCLE_QUIET_MS] so they do not take back the link the cycle
++ * handed over. The escalated wake remains the fallback.
++ */
++object HandsFreeWakeEscalation {
++
++    /** Escalated wakes allowed between one handshake-server start and the next. */
++    const val MAX_WAKES = 2
++
++    /** How long the stand-down runs before the first escalated wake. */
++    const val ESCALATE_AFTER_MS = 6_000L
++
++    /** Minimum gap between two escalated wakes, so a phone that is merely slow is not poked twice over. */
++    const val COOLDOWN_MS = 15_000L
++
++    /** Last release where `BluetoothAdapter.disable()` does anything for an app; from 33 it is a no-op. */
++    const val LAST_CYCLEABLE_SDK = 32
++
++    /** Radio cycles allowed per handshake-server start. A cycle costs every Bluetooth device a few seconds. */
++    const val MAX_CYCLES = 1
++
++    /** Bounds on the two adapter transitions, so a radio that never answers cannot hang the loop. */
++    const val ADAPTER_OFF_WAIT_MS = 10_000L
++    const val ADAPTER_ON_WAIT_MS = 20_000L
++
++    /** After a cycle, how long no poke goes out: the stereo reconnects hands-free and the phone dials back. */
++    const val POST_CYCLE_QUIET_MS = 25_000L
++
++    /** Whether to cycle this unit's own Bluetooth instead of poking over the link it holds. */
++    fun shouldCycleRadio(
++        sdkInt: Int,
++        sessionInProgress: Boolean,
++        standDownSinceMs: Long,
++        cyclesUsed: Int,
++        now: Long,
++    ): Boolean {
++        if (sdkInt > LAST_CYCLEABLE_SDK) return false
++        if (sessionInProgress) return false
++        if (cyclesUsed >= MAX_CYCLES) return false
++        if (standDownSinceMs <= 0L || now - standDownSinceMs < ESCALATE_AFTER_MS) return false
++        return true
++    }
++
++    /** Whether pokes stand aside because a cycle is running or has just handed the link back. */
++    fun quietAfterCycle(cycleInFlight: Boolean, quietUntilMs: Long, now: Long): Boolean =
++        cycleInFlight || (quietUntilMs > 0L && now < quietUntilMs)
++
++    fun shouldEscalate(
++        sessionInProgress: Boolean,
++        standDownSinceMs: Long,
++        lastWakeMs: Long,
++        wakesUsed: Int,
++        now: Long,
++    ): Boolean {
++        if (sessionInProgress) return false
++        if (wakesUsed >= MAX_WAKES) return false
++        if (standDownSinceMs <= 0L || now - standDownSinceMs < ESCALATE_AFTER_MS) return false
++        if (lastWakeMs > 0L && now - lastWakeMs < COOLDOWN_MS) return false
++        return true
++    }
++}
+diff --git a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/NativeAaHandshakeManager.kt b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/NativeAaHandshakeManager.kt
+index 146ad30..de8f111 100644
+--- a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/NativeAaHandshakeManager.kt
++++ b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/NativeAaHandshakeManager.kt
+@@ -145,6 +145,16 @@ class NativeAaHandshakeManager(
+     // the current run of skips. Cleared as soon as a poke does go ahead, so a later skip says so
+     // again rather than hiding behind a line from minutes earlier.
+     @Volatile private var handsFreeSkipLogged = false
++    // CarLink: HandsFreeWakeEscalation. When each device's hands-free stand-down began, and the
++    // escalated wakes spent since the last start().
++    private val handsFreeStandDownSince = java.util.concurrent.ConcurrentHashMap<String, Long>()
++    @Volatile private var escalatedWakes = 0
++    @Volatile private var lastEscalatedWakeAt = 0L
++    // CarLink: HandsFreeWakeEscalation's radio cycle, per start().
++    @Volatile private var radioCycles = 0
++    @Volatile private var radioCycleInFlight = false
++    @Volatile private var radioCycleQuietUntil = 0L
++    @Volatile private var radioQuietLogged = false
+     // CarLink (open-headunit c86332be): whether this app stands in for a primary radio with no
+     // hands-free stack of its own. Answered once in start(); the poke needs the same answer the HFP
+     // listener acted on, because driving a link from here would compete with a real stack.
+@@ -286,9 +296,49 @@ class NativeAaHandshakeManager(
+     // deciding whether it's safe to force-reinit should check this instead of isActive() alone.
+     fun isAttemptInFlight(): Boolean = isHandshakeInFlight() || pokeAttemptInFlight || isHandoffSettling()
+ 
++    /**
++     * The Android Auto RFCOMM server on the primary radio. CarLink: lifted out of start() unchanged,
++     * so [cycleOwnRadio] can publish the record again once the adapter is back on.
++     */
++    @SuppressLint("MissingPermission")
++    private fun launchAaListener(adapter: BluetoothAdapter) {
++        scope.launch(Dispatchers.IO + CoroutineName("NativeAa-RfcommServer")) {
++            try {
++                aaServerSocket = adapter.listenUsingRfcommWithServiceRecord("AA BT Listener", AA_UUID)
++                AppLog.i("NativeAA: ACTIVELY LISTENING on Android Auto UUID ($AA_UUID) on radio [$localRadioName]... Waiting for phone to connect back!")
++                while (isRunning && isActive) {
++                    val socket = aaServerSocket?.accept()
++                    if (socket != null) {
++                        AppLog.i("NativeAA: Connection accepted from ${socket.remoteDevice.name} (${socket.remoteDevice.address}) on local radio [$localRadioName]")
++                        if (refuseWhileBackedOff(socket)) continue
++                        // [FIX] Launch handshake in a separate coroutine so the server can accept the next connection!
++                        scope.launch(Dispatchers.IO + CoroutineName("NativeAa-Handshake-${socket.remoteDevice.address}")) {
++                            handleHandshake(BluetoothSocketLink(socket), localRadioName) // CarLink: HandshakeLink seam
++                        }
++                    }
++                }
++            } catch (e: Exception) {
++                if (aaListenersClosedForSession) {
++                    AppLog.d("NativeAA: AA Server socket closed after successful handoff.")
++                } else if (isRunning) {
++                    AppLog.e("NativeAA: AA Server socket error: ${e.message}", e)
++                } else {
++                    AppLog.d("NativeAA: AA Server socket closed cleanly.")
++                }
++            }
++        }
++    }
++
+     @SuppressLint("MissingPermission")
+     fun start() {
+         if (isRunning) return
++        // CarLink: a fresh budget for HandsFreeWakeEscalation on every start.
++        handsFreeStandDownSince.clear()
++        escalatedWakes = 0
++        lastEscalatedWakeAt = 0L
++        radioCycles = 0
++        radioCycleQuietUntil = 0L
++        radioQuietLogged = false
+ 
+         // Leave isRunning false, like the "adapter disabled" case below: isActive() callers must
+         // see this as genuinely stopped. Nothing here is retryable, but a listener that was never
+@@ -334,31 +384,7 @@ class NativeAaHandshakeManager(
+         AppLog.i("NativeAA: Starting Bluetooth Handshake Servers (primary radio [$localRadioName])...")
+ 
+         // Start AA RFCOMM Server
+-        scope.launch(Dispatchers.IO + CoroutineName("NativeAa-RfcommServer")) {
+-            try {
+-                aaServerSocket = adapter.listenUsingRfcommWithServiceRecord("AA BT Listener", AA_UUID)
+-                AppLog.i("NativeAA: ACTIVELY LISTENING on Android Auto UUID ($AA_UUID) on radio [$localRadioName]... Waiting for phone to connect back!")
+-                while (isRunning && isActive) {
+-                    val socket = aaServerSocket?.accept()
+-                    if (socket != null) {
+-                        AppLog.i("NativeAA: Connection accepted from ${socket.remoteDevice.name} (${socket.remoteDevice.address}) on local radio [$localRadioName]")
+-                        if (refuseWhileBackedOff(socket)) continue
+-                        // [FIX] Launch handshake in a separate coroutine so the server can accept the next connection!
+-                        scope.launch(Dispatchers.IO + CoroutineName("NativeAa-Handshake-${socket.remoteDevice.address}")) {
+-                            handleHandshake(BluetoothSocketLink(socket), localRadioName) // CarLink: HandshakeLink seam
+-                        }
+-                    }
+-                }
+-            } catch (e: Exception) {
+-                if (aaListenersClosedForSession) {
+-                    AppLog.d("NativeAA: AA Server socket closed after successful handoff.")
+-                } else if (isRunning) {
+-                    AppLog.e("NativeAA: AA Server socket error: ${e.message}", e)
+-                } else {
+-                    AppLog.d("NativeAA: AA Server socket closed cleanly.")
+-                }
+-            }
+-        }
++        launchAaListener(adapter) // CarLink: a function, so a radio cycle can open it again
+ 
+         // Start HFP RFCOMM Server (Required by some phones to detect HU)
+         // CarLink (open-headunit c86332be): only where the radio advertises no Hands-Free of its own.
+@@ -703,6 +729,71 @@ class NativeAaHandshakeManager(
+         }
+     }
+ 
++    /**
++     * CarLink: HandsFreeWakeEscalation's radio cycle, after open-headunit's `cycleOwnRadio`. Turns
++     * this unit's Bluetooth off and on so its own stack reconnects hands-free and the phone sees the
++     * event with a connected profile, then publishes the Android Auto record again. Runs to the end
++     * even if the poke job is cancelled: a radio left off would cost the driver Bluetooth entirely.
++     */
++    @SuppressLint("MissingPermission")
++    @Suppress("DEPRECATION")
++    private suspend fun cycleOwnRadio(device: BluetoothDevice, standDownSince: Long, now: Long): Unit = withContext(NonCancellable) {
++        val adapter = BluetoothHelper.getBluetoothAdapter(context)
++        val enabled = try { adapter != null && adapter.isEnabled } catch (e: Exception) { false }
++        if (adapter == null || !enabled) {
++            AppLog.i("NativeAA: this unit's Bluetooth is already off, so there is nothing to cycle.")
++            return@withContext
++        }
++        radioCycles++
++        radioCycleInFlight = true
++        radioQuietLogged = false
++        AppLog.i("NativeAA: cycling this unit's Bluetooth to wake ${device.name ?: "unnamed"} (${device.address}) - " +
++            "it has not started Android Auto in ${(now - standDownSince) / 1000}s, and a hands-free link that never " +
++            "changes raises no event for the phone. The stereo's own stack reconnects hands-free afterwards.")
++        try {
++            var disableCalled = false
++            val offReached = try {
++                disableCalled = adapter.disable()
++                disableCalled && awaitAdapterState(adapter, BluetoothAdapter.STATE_OFF,
++                    com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.ADAPTER_OFF_WAIT_MS)
++            } catch (e: Exception) {
++                AppLog.w("NativeAA: this unit would not turn its Bluetooth off: ${e.javaClass.simpleName}: ${e.message}")
++                false
++            }
++            // Unconditional after a disable() that was accepted: the radio may still be going down.
++            val onReached = if (!disableCalled) false else try {
++                adapter.enable()
++                awaitAdapterState(adapter, BluetoothAdapter.STATE_ON,
++                    com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.ADAPTER_ON_WAIT_MS)
++            } catch (e: Exception) {
++                AppLog.w("NativeAA: this unit would not turn its Bluetooth back on: ${e.javaClass.simpleName}: ${e.message}")
++                false
++            }
++            AppLog.i("NativeAA: Bluetooth cycle finished (off=$offReached, on=$onReached).")
++            if (onReached && isRunning) {
++                try { aaServerSocket?.close() } catch (e: Exception) {}
++                aaServerSocket = null
++                launchAaListener(adapter)
++                radioCycleQuietUntil = SystemClock.elapsedRealtime() +
++                    com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.POST_CYCLE_QUIET_MS
++            }
++        } finally {
++            radioCycleInFlight = false
++        }
++        Unit
++    }
++
++    /** CarLink: polls the adapter state; true once it reads [target], false after [boundMs]. */
++    private suspend fun awaitAdapterState(adapter: BluetoothAdapter, target: Int, boundMs: Long): Boolean {
++        val deadline = SystemClock.elapsedRealtime() + boundMs
++        while (SystemClock.elapsedRealtime() < deadline) {
++            val state = try { adapter.state } catch (e: Exception) { -1 }
++            if (state == target) return true
++            delay(200)
++        }
++        return false
++    }
++
+     /**
+      * Tries each of [BluetoothWakePolicy.POKE_TARGETS] in turn, holding whichever connects for
+      * [holdMs]. Returns true if any of them did, false without opening anything if either guard
+@@ -720,12 +811,55 @@ class NativeAaHandshakeManager(
+             AppLog.i("NativeAA: Not poking ${device.name ?: "unnamed"} (${device.address}) — it is an Apple device.")
+             return false
+         }
++        // CarLink: HandsFreeWakeEscalation. While the unit's own radio is cycling, or its stack is
++        // reconnecting hands-free after one, a poke would take back the link the cycle handed over.
++        if (com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.quietAfterCycle(
++                radioCycleInFlight, radioCycleQuietUntil, SystemClock.elapsedRealtime())) {
++            if (!radioQuietLogged) {
++                radioQuietLogged = true
++                AppLog.i("NativeAA: Not poking ${device.address} - this unit's Bluetooth was just cycled and its own " +
++                    "hands-free link is coming back; waiting for the phone to start Android Auto.")
++            }
++            return false
++        }
+         // A poke that connects takes the phone's single hands-free slot, and this unit's own client
+         // is dropped to make room. See BluetoothWakePolicy for the measurement.
+         val handsFreeLink = BluetoothWakePolicy.HandsFreeLink.of(BluetoothHelper.handsFreeLinkState(context, device.address)) // CarLink: per phone
+         if (!BluetoothWakePolicy.shouldPoke(handsFreeLink)) {
+-            noteHandsFreePokeSkip(device)
+-            return false
++            // CarLink: HandsFreeWakeEscalation. A hands-free link the stereo's own stack connected
++            // before this session raises no event for the phone, so after a short wait the poke
++            // goes out anyway, a bounded number of times.
++            val now = SystemClock.elapsedRealtime()
++            val standDownSince = handsFreeStandDownSince.getOrPut(device.address) { now }
++            if (com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.shouldCycleRadio(
++                    sdkInt = Build.VERSION.SDK_INT,
++                    sessionInProgress = commManager.isConnected || isHandshakeInFlight() || isHandoffSettling(),
++                    standDownSinceMs = standDownSince,
++                    cyclesUsed = radioCycles,
++                    now = now,
++                )) {
++                cycleOwnRadio(device, standDownSince, now)
++                return false
++            }
++            val escalate = com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.shouldEscalate(
++                sessionInProgress = commManager.isConnected || isHandshakeInFlight() || isHandoffSettling(),
++                standDownSinceMs = standDownSince,
++                lastWakeMs = lastEscalatedWakeAt,
++                wakesUsed = escalatedWakes,
++                now = now,
++            )
++            if (!escalate) {
++                noteHandsFreePokeSkip(device)
++                return false
++            }
++            escalatedWakes++
++            lastEscalatedWakeAt = now
++            AppLog.i("NativeAA: waking ${device.name ?: "unnamed"} (${device.address}) despite the hands-free link - " +
++                "it has not started Android Auto in ${(now - standDownSince) / 1000}s, and a link that never changes " +
++                "raises no event for the phone to notice. Wake $escalatedWakes of " +
++                "${com.andrerinas.openheadunit.aap.HandsFreeWakeEscalation.MAX_WAKES}.")
++        } else {
++            handsFreeStandDownSince.remove(device.address) // CarLink
+         }
+         handsFreeSkipLogged = false
+ 
+diff --git a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicy.kt b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicy.kt
+new file mode 100644
+index 0000000..f3659e3
+--- /dev/null
++++ b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicy.kt
+@@ -0,0 +1,35 @@
++// CarLink: new file (see docs/VENDOR_CHANGES.md).
++package com.andrerinas.openheadunit.connection
++
++/**
++ * What to do with a Wi-Fi Direct group that is up on this unit but is not the one this session
++ * asked for.
++ *
++ * DiAuto refused every such group ("Wi-Fi Direct is in use by another app") so that it would never
++ * tear down another app's live projection. On head units that is far too strict: a persistent group
++ * left by an earlier app (open-headunit, a previous DiAuto install, the stereo's own phone-link app)
++ * or re-invoked by wpa_supplicant at boot sits there with nobody on it, and every wireless Android
++ * Auto attempt failed before it started (seen on a Topway head unit where open-headunit, which just
++ * removes the old group, connected). A group this unit owns with no client on it carries nothing,
++ * so removing it costs nobody anything; only a group with a phone on it, or one this unit joined as
++ * a client, is someone's live link and stays refused.
++ */
++internal object P2pStaleGroupPolicy {
++
++    enum class Verdict {
++        /** Ours: handle it as before. */
++        OURS,
++
++        /** Not ours and idle: remove it (or, before our create, wait for our create to replace it). */
++        STALE,
++
++        /** Not ours and in use: leave it alone and report it. */
++        IN_USE,
++    }
++
++    fun judge(ours: Boolean, isGroupOwner: Boolean, clientCount: Int): Verdict = when {
++        ours -> Verdict.OURS
++        isGroupOwner && clientCount == 0 -> Verdict.STALE
++        else -> Verdict.IN_USE
++    }
++}
+diff --git a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/WifiDirectManager.kt b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/WifiDirectManager.kt
+index 40b1638..fa8652f 100644
+--- a/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/WifiDirectManager.kt
++++ b/vendor/diauto/app/src/main/java/com/andrerinas/openheadunit/connection/WifiDirectManager.kt
+@@ -462,8 +462,21 @@ class WifiDirectManager(private val context: Context) : WifiP2pManager.Connectio
+         if (group != null && group.isGroupOwner) {
+             sessionOwnership.observeCreatedGroup(true, group.networkName)
+             if (!sessionOwnership.owns(true, group.networkName)) {
+-                foreignGroupDetected()
+-                return
++                // CarLink: an idle group that is not ours is stale, not another app's live link
++                // (P2pStaleGroupPolicy). Before our create answers, the create (BUSY) and
++                // removeOwnedGroup deal with it; after our create succeeded it is the only group
++                // this radio can hold, so the firmware renamed ours: adopt the name it chose.
++                val clients = group.clientList?.size ?: 0
++                if (P2pStaleGroupPolicy.judge(false, true, clients) != P2pStaleGroupPolicy.Verdict.STALE) {
++                    foreignGroupDetected()
++                    return
++                }
++                if (!sessionOwnership.created) {
++                    AppLog.i("WifiDirectManager: an idle group ${group.networkName} from before this bring-up is up; our create replaces it.")
++                    return
++                }
++                AppLog.w("WifiDirectManager: our group came up as ${group.networkName} instead of ${sessionOwnership.networkName}; adopting the name the firmware chose.")
++                sessionOwnership.expect(group.networkName)
+             }
+             isGroupOwner = true
+             isConnected = true
+@@ -1814,18 +1827,31 @@ class WifiDirectManager(private val context: Context) : WifiP2pManager.Connectio
+     @SuppressLint("MissingPermission")
+     private fun removeOwnedGroup(
+         mgr: WifiP2pManager?, ch: WifiP2pManager.Channel?, listener: WifiP2pManager.ActionListener,
++        removeStale: Boolean = true, // CarLink: false for the final teardown in stop()
+     ) {
+         if (mgr == null || ch == null) return
+         val gen = generation
+         mgr.requestGroupInfo(ch) { group ->
+             if (gen != generation) return@requestGroupInfo
++            // CarLink: P2pStaleGroupPolicy. An idle group another app or an earlier session left
++            // behind is removed, as open-headunit does, instead of failing the whole session.
++            val verdict = if (group == null) null else P2pStaleGroupPolicy.judge(
++                sessionOwnership.owns(group.isGroupOwner, group.networkName),
++                group.isGroupOwner, group.clientList?.size ?: 0,
++            )
+             if (group == null) {
+                 listener.onSuccess()
+-            } else if (sessionOwnership.owns(group.isGroupOwner, group.networkName)) {
++            } else if (verdict == P2pStaleGroupPolicy.Verdict.OURS ||
++                (removeStale && verdict == P2pStaleGroupPolicy.Verdict.STALE)) {
++                if (verdict == P2pStaleGroupPolicy.Verdict.STALE) {
++                    AppLog.w("WifiDirectManager: removing the idle Wi-Fi Direct group ${group.networkName} left by another app or an earlier session (no phone on it).")
++                }
+                 mgr.removeGroup(ch, object : WifiP2pManager.ActionListener {
+                     override fun onSuccess() { if (gen == generation) listener.onSuccess() }
+                     override fun onFailure(reason: Int) { if (gen == generation) listener.onFailure(reason) }
+                 })
++            } else if (!removeStale) {
++                listener.onFailure(WifiP2pManager.BUSY) // CarLink: not ours; leave it, nothing to report at teardown
+             } else {
+                 // Do not call a retry continuation: it would immediately contend with the owner.
+                 foreignGroupDetected()
+@@ -1868,7 +1894,7 @@ class WifiDirectManager(private val context: Context) : WifiP2pManager.Connectio
+             removeOwnedGroup(manager, channel, object : WifiP2pManager.ActionListener {
+                 override fun onSuccess() { AppLog.d("WifiDirectManager: Final group removal success") }
+                 override fun onFailure(reason: Int) { AppLog.d("WifiDirectManager: Final group removal failed: $reason") }
+-            })
++            }, removeStale = false) // CarLink
+         }
+ 
+         isGroupOwner = false
+diff --git a/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalationTest.kt b/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalationTest.kt
+new file mode 100644
+index 0000000..8efe19f
+--- /dev/null
++++ b/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/aap/HandsFreeWakeEscalationTest.kt
+@@ -0,0 +1,46 @@
++// CarLink: new file (see docs/VENDOR_CHANGES.md).
++package com.andrerinas.openheadunit.aap
++
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class HandsFreeWakeEscalationTest {
++    private val t0 = 100_000L
++
++    @Test fun `never on the first stand-down`() {
++        assertFalse(HandsFreeWakeEscalation.shouldEscalate(false, t0, 0L, 0, t0))
++        assertFalse(HandsFreeWakeEscalation.shouldEscalate(false, 0L, 0L, 0, t0))
++    }
++
++    @Test fun `wakes once the phone has stayed silent long enough`() {
++        // Topway log: stand-down 2.3 s into the session, CarLink's first nudge at 10 s.
++        assertTrue(HandsFreeWakeEscalation.shouldEscalate(false, t0, 0L, 0, t0 + 7_700L))
++    }
++
++    @Test fun `spaced by the cooldown and bounded by the budget`() {
++        val first = t0 + 9_000L
++        assertFalse(HandsFreeWakeEscalation.shouldEscalate(false, t0, first, 1, first + 5_000L))
++        assertTrue(HandsFreeWakeEscalation.shouldEscalate(false, t0, first, 1, first + HandsFreeWakeEscalation.COOLDOWN_MS))
++        assertFalse(HandsFreeWakeEscalation.shouldEscalate(false, t0, first, HandsFreeWakeEscalation.MAX_WAKES, first + 60_000L))
++    }
++
++    @Test fun `nothing touches the radio during a session`() {
++        assertFalse(HandsFreeWakeEscalation.shouldEscalate(true, t0, 0L, 0, t0 + 60_000L))
++    }
++
++    @Test fun `cycles the radio once, only below API 33`() {
++        assertTrue(HandsFreeWakeEscalation.shouldCycleRadio(27, false, t0, 0, t0 + 7_700L))
++        assertFalse(HandsFreeWakeEscalation.shouldCycleRadio(27, false, t0, 0, t0 + 2_000L))
++        assertFalse(HandsFreeWakeEscalation.shouldCycleRadio(27, false, t0, 1, t0 + 60_000L))
++        assertFalse(HandsFreeWakeEscalation.shouldCycleRadio(33, false, t0, 0, t0 + 60_000L))
++        assertFalse(HandsFreeWakeEscalation.shouldCycleRadio(27, true, t0, 0, t0 + 60_000L))
++    }
++
++    @Test fun `pokes stay quiet while the cycle hands the link back`() {
++        assertTrue(HandsFreeWakeEscalation.quietAfterCycle(true, 0L, t0))
++        assertTrue(HandsFreeWakeEscalation.quietAfterCycle(false, t0 + 1_000L, t0))
++        assertFalse(HandsFreeWakeEscalation.quietAfterCycle(false, t0, t0 + 1L))
++        assertFalse(HandsFreeWakeEscalation.quietAfterCycle(false, 0L, t0))
++    }
++}
+diff --git a/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicyTest.kt b/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicyTest.kt
+new file mode 100644
+index 0000000..ac9a15b
+--- /dev/null
++++ b/vendor/diauto/app/src/test/java/com/andrerinas/openheadunit/connection/P2pStaleGroupPolicyTest.kt
+@@ -0,0 +1,26 @@
++// CarLink: new file (see docs/VENDOR_CHANGES.md).
++package com.andrerinas.openheadunit.connection
++
++import com.andrerinas.openheadunit.connection.P2pStaleGroupPolicy.Verdict
++import org.junit.Assert.assertEquals
++import org.junit.Test
++
++class P2pStaleGroupPolicyTest {
++    @Test fun `our own group is handled as ours whatever its clients`() {
++        assertEquals(Verdict.OURS, P2pStaleGroupPolicy.judge(ours = true, isGroupOwner = true, clientCount = 0))
++        assertEquals(Verdict.OURS, P2pStaleGroupPolicy.judge(ours = true, isGroupOwner = true, clientCount = 1))
++    }
++
++    @Test fun `an idle group left by another app is stale and may be removed`() {
++        // Topway head unit: a persistent group from open-headunit or the stereo, nobody on it.
++        assertEquals(Verdict.STALE, P2pStaleGroupPolicy.judge(ours = false, isGroupOwner = true, clientCount = 0))
++    }
++
++    @Test fun `a group with a phone on it stays another app's`() {
++        assertEquals(Verdict.IN_USE, P2pStaleGroupPolicy.judge(ours = false, isGroupOwner = true, clientCount = 1))
++    }
++
++    @Test fun `a group this unit joined as a client stays another app's`() {
++        assertEquals(Verdict.IN_USE, P2pStaleGroupPolicy.judge(ours = false, isGroupOwner = false, clientCount = 0))
++    }
++}

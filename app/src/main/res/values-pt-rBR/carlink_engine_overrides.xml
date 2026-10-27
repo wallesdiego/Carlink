@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Brazilian Portuguese for carlink_engine_overrides.xml. Needed as well as the English file: DiAuto
+  ships its own values-pt-rBR, which would win over CarLink's English values on a pt-BR device.
+-->
+<resources>
+    <!-- DiPlay: CarPlayHostActivity -->
+    <string name="diplay">CarLink</string>
+    <string name="back_to_diplay">Voltar ao CarLink</string>
+    <string name="could_not_start_carplay_return_to_diplay_and_check_app_per">Não foi possível iniciar o CarPlay. Volte ao CarLink e verifique as permissões do app.</string>
+    <string name="allow_nearby_devices_for_diplay_in_the_head_unit_s_app_per">Permita Dispositivos próximos para o CarLink nas permissões de apps da multimídia.</string>
+    <string name="allow_precise_location_for_diplay_in_the_head_unit_s_app_p">Permita a Localização precisa para o CarLink nas permissões de apps da multimídia.</string>
+    <string name="existing_wifi_instructions">Conecte a multimídia e o iPhone à mesma rede Wi-Fi externa nas configurações do sistema. Digite abaixo o nome exato e a senha WPA2; deixe a senha vazia só para uma rede aberta. Use WPA2 ou o modo misto WPA2/WPA3 e desative o isolamento de clientes no roteador. O CarLink mantém essa conexão Wi-Fi e não cria hotspot.</string>
+    <string name="open_diplay_settings_hint">Durante o CarPlay, deslize para baixo com %1$d dedos para abrir o menu do CarPlay.</string>
+    <string name="carplay_settings">Menu do CarPlay</string>
+    <string name="side_panel_full_screen">Tela cheia</string>
+    <string name="setup_error_auth">Os arquivos de autenticação do CarPlay não estão nesta versão. Configurações › Diagnóstico explica o que é necessário.</string>
+    <!-- DiPlay: dashboard map and the accessibility service shown in system settings -->
+    <string name="cluster_waiting_for_map">CarLink · aguardando o mapa do CarPlay</string>
+    <string name="wheel_key_service_label">Botões do volante do CarLink</string>
+    <string name="wheel_key_service_description">Permite que o CarLink use os botões do volante escolhidos para dar zoom no mapa do CarPlay no painel e para navegar pela tela do CarPlay. Ele só recebe os toques dos botões e não lê a tela.</string>
+
+    <!-- DiAuto: AapProjectionActivity's exit menu (two-finger swipe from the edge) and its one-time hint -->
+    <string name="exit_dialog_title">Android Auto</string>
+    <string name="exit_dialog_stop">Desconectar</string>
+    <string name="exit_dialog_background">Mover para segundo plano</string>
+    <string name="gesture_hint">Dica: deslize da borda esquerda com dois dedos para abrir o menu do Android Auto.</string>
+
+    <!-- DiAuto: AapService notifications -->
+    <string name="notification_service_running">O Android Auto está pronto</string>
+    <string name="boot_loop_paused_generic">Este aparelho reiniciou três vezes seguidas logo depois de o CarLink iniciar o Android Auto sem fio, então o modo sem fio ficou desligado desta vez. O USB continua funcionando. Abra o CarLink para ligá-lo de novo.</string>
+    <string name="boot_loop_paused_native_wifi_direct">Este aparelho reiniciou três vezes seguidas logo depois de o CarLink iniciar o Android Auto sem fio, então o modo sem fio ficou desligado desta vez. Em algumas multimídias, o chip de Wi-Fi derruba o sistema inteiro quando um celular entra numa rede Wi-Fi Direct. Tente o hotspot do carro como método sem fio. O USB continua funcionando.</string>
+
+    <!-- CarLink's entry in Android Auto's exit menu, in place of DiAuto's Quick Settings (carlink_engine_theme.xml). -->
+    <string name="carlink_engine_open_carlink">Abrir o CarLink</string>
+</resources>

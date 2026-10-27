@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overrides both engines' app_name: the merged app is CarLink everywhere. -->
+    <string name="app_name">CarLink</string>
+
+    <string name="notification_channel_launch">Abrir o CarLink</string>
+    <string name="notification_phone_ready">%1$s está por perto. Toque para conectar.</string>
+    <string name="notification_open">Toque para abrir o CarLink.</string>
+    <!-- Android Auto engine's persistent notification channel, shown in system notification settings. -->
+    <string name="carlink_notification_channel_android_auto">Conexão do Android Auto</string>
+
+    <!-- Shared vocabulary -->
+    <string name="carlink_back">Voltar</string>
+    <string name="carlink_engine_carplay">CarPlay</string>
+    <string name="carlink_engine_android_auto">Android Auto</string>
+    <string name="carlink_transport_usb">USB</string>
+    <string name="carlink_transport_wireless">Sem fio</string>
+    <!-- How a phone reaches the screen: by cable (USB) or wirelessly (Bluetooth + Wi-Fi). -->
+    <string name="carlink_transport_cable">Cabo</string>
+    <string name="carlink_transport_usb_cable">Cabo USB</string>
+    <string name="carlink_transport_plugged_in">Conectado no cabo (USB)</string>
+    <string name="carlink_transport_with_path">%1$s · %2$s</string>
+    <string name="carlink_transport_connected_cable">Conectado por cabo</string>
+    <string name="carlink_transport_connected_wireless">Conectado sem fio</string>
+    <string name="carlink_transport_connecting_cable">Conectando por cabo</string>
+    <string name="carlink_transport_connecting_wireless">Conectando sem fio</string>
+    <string name="carlink_state_on">Ligado</string>
+    <string name="carlink_state_off">Desligado</string>
+    <string name="carlink_state_selected">Selecionado</string>
+</resources>

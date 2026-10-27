@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home dashboard (design/RESEARCH_PREMIUM_UX.md §7.3). Brazilian Portuguese. -->
+<resources>
+    <string name="carlink_home_settings">Configurações</string>
+
+    <string name="carlink_home_eyebrow_setup">Configuração</string>
+    <string name="carlink_home_eyebrow_ready">Pronto</string>
+    <string name="carlink_home_eyebrow_connecting">Conectando</string>
+    <string name="carlink_home_eyebrow_connected">Conectado</string>
+    <string name="carlink_home_eyebrow_problem">Requer atenção</string>
+
+    <string name="carlink_home_permission_title">Uma permissão rápida</string>
+    <string name="carlink_home_permission_body">O CarLink precisa de dispositivos próximos, localização e microfone para encontrar seu celular e rodar o CarPlay ou o Android Auto.</string>
+    <string name="carlink_home_permission_action">Permitir</string>
+
+    <string name="carlink_home_bt_off_title">O Bluetooth está desligado</string>
+    <string name="carlink_home_bt_off_body">Ligue-o para conectar sem fio, ou conecte o celular com um cabo.</string>
+    <string name="carlink_home_bt_off_action">Ligar o Bluetooth</string>
+
+    <string name="carlink_home_ready_title">Conecte o cabo ou aproxime o celular</string>
+    <string name="carlink_home_ready_body">O iPhone abre o CarPlay. Celulares Android abrem o Android Auto.</string>
+    <string name="carlink_home_pair_action">Parear um celular</string>
+
+    <string name="carlink_home_ready_phone_title">Conectar %1$s?</string>
+    <string name="carlink_home_ready_phone_body">%1$s via %2$s. Conectar um cabo também funciona.</string>
+    <string name="carlink_home_connect">Conectar</string>
+    <string name="carlink_home_paused">A conexão automática está pausada</string>
+    <string name="carlink_home_resume">Retomar</string>
+
+    <string name="carlink_home_connecting_title">Iniciando o %1$s</string>
+    <string name="carlink_home_connecting_body">Mantenha o %1$s desbloqueado. Isso costuma levar alguns segundos.</string>
+    <string name="carlink_home_cancel">Cancelar</string>
+    <!-- The attempt's steps (LinkState.step 1-4): waiting for the phone, the phone answered, Wi-Fi link, picture. -->
+    <string name="carlink_home_step_reaching">Chamando o celular</string>
+    <string name="carlink_home_step_answered">Celular respondeu</string>
+    <string name="carlink_home_step_linking">Conectando</string>
+    <string name="carlink_home_step_picture">Imagem</string>
+    <!-- Under the progress line when the step names do not fit: "Step 2 of 4 · Identified". -->
+    <string name="carlink_home_step_of">Etapa %1$d de %2$d · %3$s</string>
+
+    <string name="carlink_home_connected_title">%1$s em execução</string>
+    <string name="carlink_home_connected_body">%1$s · %2$s · %3$s</string>
+    <string name="carlink_home_return">Voltar ao %1$s</string>
+    <string name="carlink_home_disconnect">Desconectar</string>
+
+    <string name="carlink_home_try_again">Tentar de novo</string>
+    <string name="carlink_home_diagnostics">Diagnóstico</string>
+    <string name="carlink_home_open_settings">Abrir configurações</string>
+    <string name="carlink_home_error_auth_title">O CarPlay não consegue se autenticar</string>
+    <string name="carlink_home_error_auth_body">Esta versão não tem os arquivos de autenticação do CarPlay. O Android Auto continua funcionando.</string>
+    <string name="carlink_home_error_iphone_title">Pareie o iPhone primeiro</string>
+    <string name="carlink_home_error_iphone_body">Pareie-o nas configurações de Bluetooth do carro e tente de novo. Por cabo funciona sem parear.</string>
+    <string name="carlink_home_error_hotspot_details_title">Adicione o hotspot do carro</string>
+    <string name="carlink_home_error_hotspot_details_body">O modo sem fio precisa do nome e da senha do hotspot do carro. Adicione-os uma vez.</string>
+    <string name="carlink_home_error_hotspot_off_title">O hotspot do carro está desligado</string>
+    <string name="carlink_home_error_hotspot_off_body">Ligue o hotspot desta tela, ou use o Wi-Fi Direct, que não precisa de hotspot.</string>
+    <string name="carlink_home_error_wifi_details_title">Adicione a senha do seu Wi-Fi</string>
+    <string name="carlink_home_error_wifi_details_body">Mesmo Wi-Fi está escolhido em Configurações › Conexão. O CarLink precisa do nome e da senha da rede uma vez.</string>
+    <string name="carlink_home_error_wifi_not_joined_title">Esta tela não está no seu Wi-Fi</string>
+    <string name="carlink_home_error_wifi_not_joined_body">Mesmo Wi-Fi exige que esta tela esteja na rede salva em Configurações › Conexão. Entre nessa rede, ou use o Wi-Fi Direct.</string>
+    <string name="carlink_home_error_engine_title">Não foi possível conectar</string>
+    <string name="carlink_home_error_engine_body">O %1$s interrompeu a conexão. Desbloqueie o celular e tente de novo.</string>
+
+    <string name="carlink_home_chip_bluetooth">Bluetooth</string>
+    <string name="carlink_home_chip_network">Rede</string>
+    <string name="carlink_home_chip_phone">Celular</string>
+    <string name="carlink_home_bt_chip_on">Ligado</string>
+    <string name="carlink_home_bt_chip_off">Desligado</string>
+    <string name="carlink_home_bt_no_permission">Precisa de permissão</string>
+    <string name="carlink_home_bt_chip_unsupported">Indisponível</string>
+    <string name="carlink_home_net_same_wifi">Mesmo Wi-Fi · mais rápido</string>
+    <string name="carlink_home_net_same_wifi_named">%1$s · mais rápido</string>
+    <string name="carlink_home_net_hotspot">Hotspot do carro</string>
+    <string name="carlink_home_net_direct">Wi-Fi Direct</string>
+    <string name="carlink_home_network_sheet_title">Tipo de conexão</string>
+    <string name="carlink_home_network_sheet_now">O Bluetooth inicia a conexão; a imagem e o som vão pelo Wi-Fi. Em uso agora: %1$s.</string>
+    <string name="carlink_home_no_phones">Nenhum celular ainda</string>
+    <plurals name="carlink_home_phone_count">
+        <item quantity="one">%d celular</item>
+        <item quantity="many">%d celulares</item>
+        <item quantity="other">%d celulares</item>
+    </plurals>
+
+    <string name="carlink_home_phones_title">Celulares</string>
+    <string name="carlink_home_phones_hint">Toque num celular para conectá-lo.</string>
+    <string name="carlink_home_phone_connected">Conectado ao carro</string>
+    <string name="carlink_home_phone_not_nearby">Pareado</string>
+    <string name="carlink_home_kind_title">Que tipo de celular é este?</string>
+    <string name="carlink_home_kind_iphone">iPhone</string>
+    <string name="carlink_home_kind_android">Celular Android</string>
+    <string name="carlink_home_switch_title">Trocar para %1$s?</string>
+    <string name="carlink_home_switch_body">O %1$s vai parar.</string>
+    <string name="carlink_home_switch_action">Trocar</string>
+
+    <string name="carlink_home_path_same_wifi">seu Wi-Fi</string>
+    <string name="carlink_home_path_hotspot">hotspot do carro</string>
+    <string name="carlink_home_path_direct">Wi-Fi Direct</string>
+    <string name="carlink_home_path_usb">USB</string>
+
+    <string name="carlink_home_same_wifi_title">Senha de %1$s</string>
+    <string name="carlink_home_wifi_dialog_title">Adicione seu Wi-Fi</string>
+    <string name="carlink_home_wifi_dialog_body">O CarLink salva nesta tela e conecta de novo.</string>
+    <string name="carlink_home_same_wifi_password">Senha do Wi-Fi</string>
+    <string name="carlink_home_same_wifi_save">Salvar</string>
+    <string name="carlink_home_same_wifi_enter">Adicionar senha</string>
+    <string name="carlink_home_same_wifi_invalid">Senhas de Wi-Fi têm de 8 a 63 caracteres.</string>
+    <string name="carlink_home_connecting_android_wireless">Aguardando o %1$s iniciar o Android Auto. Se nada acontecer em alguns segundos, desligue e ligue o Bluetooth do celular.</string>
+    <string name="carlink_home_connecting_connect_bluetooth">Conecte o %1$s no Bluetooth. O Android Auto começa sozinho assim que ele conectar.</string>
+    <string name="carlink_home_bluetooth_settings">Configurações de Bluetooth</string>
+    <!-- A wireless attempt the phone has not answered for 10 s (connection detail "phone_not_answering"). -->
+    <string name="carlink_home_eyebrow_not_answering">Sem resposta</string>
+    <string name="carlink_home_not_answering_title">Seu celular não está respondendo</string>
+    <string name="carlink_home_not_answering_title_iphone">iPhone não alcançável pelo Bluetooth</string>
+    <string name="carlink_home_not_answering_body_iphone">Desbloqueie o %1$s e confira se o Bluetooth dele está ligado, ou conecte-o com um cabo.</string>
+    <string name="carlink_home_not_answering_body_usb">Desbloqueie o %1$s e aceite o aviso na tela dele. Se nada acontecer, desconecte o cabo e conecte de novo.</string>
+    <string name="carlink_home_not_answering_body_android">Confira se o %1$s está com o Bluetooth ligado e desbloqueado, e mantenha-o perto desta tela. O Android Auto começa sozinho quando ele conectar.</string>
+    <!-- Connection v2: pre-flight problems and precise failures. -->
+    <string name="carlink_home_error_bt_off_title">O Bluetooth está desligado</string>
+    <string name="carlink_home_error_bt_off_body">As conexões sem fio começam pelo Bluetooth. Ligue-o, ou conecte o celular com um cabo.</string>
+    <string name="carlink_home_error_not_paired_title">Este celular não está pareado</string>
+    <string name="carlink_home_error_not_paired_body">No celular, abra o Bluetooth e pareie com esta tela; depois tente de novo.</string>
+    <!-- %1$s: the phone's Bluetooth name, or carlink_home_error_pairing_lost_phone. -->
+    <string name="carlink_home_error_pairing_lost_title">%1$s precisa ser pareado de novo</string>
+    <string name="carlink_home_error_pairing_lost_body">No celular, esqueça esta tela nas configurações de Bluetooth e pareie de novo.</string>
+    <string name="carlink_home_error_pairing_lost_phone">Seu celular</string>
+    <string name="carlink_home_open_bluetooth_settings">Abrir configurações de Bluetooth</string>
+    <!-- A call while the stereo's own phone link or another app may hold the microphone (a toast over the projection). -->
+    <string name="carlink_notice_call_microphone">O viva-voz da própria multimídia pode tomar o microfone. Atenda pela tela do CarPlay ou do Android Auto, ou desconecte o celular nas configurações de telefone da multimídia.</string>
+    <string name="carlink_home_error_wifi_off_title">O Wi-Fi está desligado</string>
+    <string name="carlink_home_error_wifi_off_body">A imagem vai pelo Wi-Fi. Ligue o Wi-Fi aqui; ele não precisa estar conectado a uma rede.</string>
+    <string name="carlink_home_error_location_off_title">A localização está desligada</string>
+    <string name="carlink_home_error_location_off_body">Com a localização desligada, o Android esconde os nomes de Wi-Fi e os dispositivos próximos, então a conexão sem fio não começa. Ligue-a e volte aqui.</string>
+    <string name="carlink_home_error_permissions_title">Permissões necessárias</string>
+    <string name="carlink_home_error_permissions_body">O CarLink precisa de Dispositivos próximos, Localização e Microfone para conectar seu celular.</string>
+    <string name="carlink_home_error_overlay_title">Permita que o CarLink abra sobre outros apps</string>
+    <string name="carlink_home_error_overlay_body">Assim o CarPlay ou o Android Auto aparecem assim que o celular conecta.</string>
+    <string name="carlink_home_error_vpn_title">Permita a conexão do CarPlay</string>
+    <string name="carlink_home_error_vpn_body">O CarPlay por cabo usa uma conexão privada. O Android pede uma vez para permiti-la.</string>
+    <string name="carlink_home_error_refused_title">Seu celular não conseguiu entrar no Wi-Fi</string>
+    <string name="carlink_home_error_refused_body">Confira a senha do Wi-Fi em Configurações, ou mude o tipo de conexão para Wi-Fi Direct.</string>
+    <string name="carlink_home_error_unreached_title">Seu iPhone não conseguiu alcançar esta tela</string>
+    <string name="carlink_home_error_unreached_body">Sua rede bloqueia a conexão de que o CarPlay precisa. Escolha o Wi-Fi Direct, ou conecte com um cabo.</string>
+    <string name="carlink_home_error_weak_title">O sinal sem fio estava fraco demais</string>
+    <string name="carlink_home_error_weak_body">Deixe o celular perto da tela e tente de novo, ou conecte com um cabo.</string>
+    <string name="carlink_home_error_no_answer_title">Seu celular não respondeu</string>
+    <string name="carlink_home_error_no_answer_body">Desbloqueie o celular, confira se o Bluetooth dele está ligado e conectado a esta tela, e tente de novo.</string>
+    <string name="carlink_home_error_bluetooth_title">A conexão Bluetooth falhou</string>
+    <string name="carlink_home_error_bluetooth_body">No celular, desligue e ligue o Bluetooth e tente de novo. Se continuar falhando, esqueça esta tela e pareie de novo.</string>
+    <!-- The stereo's Bluetooth is an external module apps cannot use (detect/ExternalBluetoothProbe). -->
+    <string name="carlink_home_error_external_bt_title">O modo sem fio ainda não está disponível nesta multimídia</string>
+    <string name="carlink_home_error_external_module_title">Não foi possível acessar o módulo Bluetooth da multimídia</string>
+    <string name="carlink_home_error_external_module_body">O modo sem fio pelo módulo Bluetooth da multimídia é experimental e não funcionou aqui. Numa multimídia FYT, desative primeiro o app “Car Link” da própria multimídia. Senão, conecte o celular com um cabo USB — funciona do mesmo jeito. Compartilhe o log do Diagnóstico para isso ser corrigido.</string>
+    <string name="carlink_home_error_external_bt_body">O Bluetooth desta multimídia é um módulo separado que os apps não conseguem usar, então o CarPlay e o Android Auto não começam sem fio. Conecte o celular com um cabo USB — funciona do mesmo jeito.</string>
+    <string name="carlink_home_how_to_connect">Como conectar</string>
+    <string name="carlink_home_cable_title">Conectar com cabo USB</string>
+    <string name="carlink_home_cable_body">1. Conecte o celular na porta USB da multimídia com um cabo que transmita dados (não um cabo só de carga).\n2. iPhone: o CarPlay começa sozinho. Celular Android: desbloqueie-o e permita o Android Auto se ele pedir.\n\nO modo sem fio precisa do Bluetooth da multimídia, que os apps ainda não conseguem acessar nesta multimídia.</string>
+    <string name="carlink_home_cable_ok">Entendi</string>
+    <string name="carlink_home_error_usb_title">A conexão USB falhou</string>
+    <string name="carlink_home_error_usb_body">Desbloqueie o celular e aceite o aviso dele. Se continuar falhando, tente outro cabo.</string>
+    <string name="carlink_home_fix_turn_on">Ligar</string>
+    <string name="carlink_home_fix_allow">Permitir</string>
+    <string name="carlink_home_fix_open_settings">Abrir configurações</string>
+    <string name="carlink_home_fix_use_direct">Usar Wi-Fi Direct</string>
+    <string name="carlink_home_fix_open_wifi">Abrir Wi-Fi</string>
+    <string name="carlink_home_fix_open_hotspot">Abrir configurações do hotspot</string>
+    <string name="carlink_switch_title">Trocar para %1$s?</string>
+    <string name="carlink_switch_body">O %1$s vai parar.</string>
+    <string name="carlink_switch_confirm">Trocar</string>
+    <string name="carlink_switch_keep">Agora não</string>
+    <string name="carlink_switch_how">%1$s · %2$s</string>
+    <string name="carlink_switch_via_usb">Conectado por USB</string>
+    <string name="carlink_switch_via_wireless">Disponível sem fio</string>
+    <!--
+      Why an attempt is waiting (SessionState.Active.notice as core.LinkNotice), in the driver's
+      words. %1$s is "iPhone" or "phone" (carlink_notice_phone_*).
+    -->
+    <string name="carlink_notice_phone_iphone">iPhone</string>
+    <string name="carlink_notice_phone_other">celular</string>
+    <string name="carlink_notice_slow_reaching">Demorando mais que o normal para alcançar o %1$s…</string>
+    <string name="carlink_notice_slow_handshake">Demorando mais que o normal: o %1$s ainda está respondendo…</string>
+    <string name="carlink_notice_slow_linking">Demorando mais que o normal: entrando no Wi-Fi…</string>
+    <string name="carlink_notice_slow_picture">Demorando mais que o normal: iniciando a imagem…</string>
+    <!-- iOS 27 black screen with sound (DiPlay #249); the button turns the setting on and reconnects. -->
+    <string name="carlink_notice_no_picture">Tem som mas não tem imagem? Ligue a Saída de vídeo direta</string>
+    <string name="carlink_home_direct_video_action">Ligar e reconectar</string>
+    <string name="carlink_notice_wake">Demorando mais que o normal: chamando o %1$s de novo…</string>
+    <string name="carlink_notice_restart_usb">Demorando mais que o normal: reiniciando a conexão USB…</string>
+    <string name="carlink_notice_retry">Demorando mais que o normal: tentando de novo…</string>
+    <string name="carlink_notice_fresh_wifi">Demorando mais que o normal: reconectando o Wi-Fi…</string>
+    <string name="carlink_notice_try_direct">Tentando pelo Wi-Fi Direct</string>
+    <string name="carlink_notice_try_hotspot">Tentando pelo hotspot do carro</string>
+    <string name="carlink_notice_try_same_wifi">Tentando pelo seu Wi-Fi</string>
+    <string name="carlink_notice_try_other">Tentando outra forma de conectar</string>
+    <string name="carlink_notice_replug">Desconecte o %1$s e conecte de novo</string>
+    <string name="carlink_notice_not_answering">O %1$s ainda não está respondendo</string>
+    <string name="carlink_notice_retry_bluetooth">Tentando de novo: o %1$s não respondeu pelo Bluetooth</string>
+    <string name="carlink_notice_retry_refused">Tentando de novo: o %1$s não aceitou o Wi-Fi do carro</string>
+    <string name="carlink_notice_retry_unreached">Tentando de novo: o %1$s não alcançou o Wi-Fi do carro</string>
+    <string name="carlink_notice_retry_dropped">Tentando de novo: a conexão caiu</string>
+    <string name="carlink_notice_retry_usb">Tentando de novo: a conexão USB reiniciou</string>
+    <string name="carlink_notice_retry_plain">Tentando de novo…</string>
+    <!-- A known phone's record under Home's headline: "Usually connects in 5 s by Wi-Fi Direct". -->
+    <string name="carlink_home_usual">Costuma conectar em %1$s %2$s</string>
+    <string name="carlink_home_usual_by_cable">por cabo</string>
+    <string name="carlink_home_usual_by_path">via %1$s</string>
+    <string name="carlink_seconds_short">%1$s s</string>
+</resources>

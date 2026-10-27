@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CarLink Settings (design/RESEARCH_PREMIUM_UX.md §8). Brazilian Portuguese. -->
+<resources>
+    <!-- Screen -->
+    <string name="carlink_settings_title">Configurações</string>
+    <string name="carlink_settings_back">Voltar</string>
+    <string name="carlink_settings_show_advanced">Mostrar avançado</string>
+    <string name="carlink_settings_show_advanced_detail">Todas as opções do CarPlay e do Android Auto, dentro de cada categoria</string>
+    <string name="carlink_settings_about">Sobre</string>
+    <string name="carlink_settings_about_summary">Versão, licenças e créditos</string>
+
+    <!-- Categories -->
+    <string name="carlink_settings_cat_connection">Conexão</string>
+    <string name="carlink_settings_cat_display">Tela</string>
+    <string name="carlink_settings_cat_sound">Som e voz</string>
+    <string name="carlink_settings_cat_navigation">Navegação</string>
+    <string name="carlink_settings_cat_car">Carro</string>
+    <string name="carlink_settings_cat_general">Geral</string>
+    <string name="carlink_settings_cat_connection_summary">Início automático, Wi-Fi e hotspot</string>
+    <string name="carlink_settings_cat_display_summary">Imagem, tamanho, dia e noite</string>
+    <string name="carlink_settings_cat_sound_summary">Onde tocam a música e as ligações</string>
+    <string name="carlink_settings_cat_navigation_summary">Localização do carro e rotas</string>
+    <string name="carlink_settings_cat_car_summary">Lado do volante e controles</string>
+    <string name="carlink_settings_cat_general_summary">Aparência do CarLink, ajuda e versão</string>
+
+    <!-- Shared -->
+    <string name="carlink_settings_custom">Personalizado (definido em Avançado)</string>
+    <string name="carlink_settings_custom_detail">Os valores exatos ficam em Mostrar avançado.</string>
+    <string name="carlink_settings_applies_next">Vale a partir da próxima conexão</string>
+    <string name="carlink_settings_loading">Carregando…</string>
+    <string name="carlink_settings_not_set">Não definido</string>
+    <string name="carlink_settings_done">Concluído</string>
+    <string name="carlink_settings_close">Fechar</string>
+
+    <!-- Connection -->
+    <string name="carlink_settings_group_start">Início</string>
+    <string name="carlink_settings_auto_bluetooth">Conectar automaticamente</string>
+    <string name="carlink_settings_auto_bluetooth_detail">Iniciar o CarPlay ou o Android Auto quando o Bluetooth de um celular pareado conectar</string>
+    <string name="carlink_settings_auto_usb">Conectar ao plugar o cabo</string>
+    <string name="carlink_settings_auto_usb_detail">Iniciar assim que um celular for conectado com cabo USB</string>
+    <string name="carlink_settings_start_boot">Iniciar com o carro</string>
+    <string name="carlink_settings_start_boot_detail">Abrir o CarLink quando a multimídia ligar</string>
+    <string name="carlink_settings_paused_title">A conexão automática está pausada</string>
+    <string name="carlink_settings_paused_body">Você desconectou, então o CarLink não reconecta sozinho até você conectar de novo.</string>
+    <string name="carlink_settings_resume">Retomar</string>
+
+    <string name="carlink_settings_group_wireless">Sem fio</string>
+    <string name="carlink_settings_root">Modo root</string>
+    <string name="carlink_settings_root_detail">Para multimídias com root. Permite tudo o que a configuração pede sem janelas de aviso e mantém o Wi-Fi em modo de baixa latência enquanto um celular está conectado. Seu gerenciador de root pergunta uma vez.</string>
+    <string name="carlink_settings_root_unavailable">O root não está disponível ou foi recusado, então o modo root continua desligado.</string>
+    <string name="carlink_settings_external_bt">Sem fio pelo módulo Bluetooth da multimídia (experimental)</string>
+    <string name="carlink_settings_external_bt_detail">O Bluetooth desta multimídia é um módulo separado. Ligue para o Android Auto sem fio alcançar seu celular por ele. Ainda não testado numa multimídia real; o USB continua funcionando. Vale a partir da próxima conexão.</string>
+    <string name="carlink_settings_external_bt_fyt_note">Antes, desative o app “Car Link” da própria multimídia (com.syu.carlink) em Configurações do Android › Apps.</string>
+    <string name="carlink_settings_method">Método de conexão</string>
+    <string name="carlink_settings_method_detail">Como o celular e o carro compartilham o Wi-Fi</string>
+    <string name="carlink_settings_method_auto">Automático</string>
+    <string name="carlink_settings_method_same_wifi">Mesmo Wi-Fi</string>
+    <string name="carlink_settings_method_hotspot">Hotspot do carro</string>
+    <string name="carlink_settings_method_direct">Wi-Fi Direct</string>
+    <string name="carlink_settings_method_auto_detail">Escolhe o melhor caminho antes de cada conexão: mesmo Wi-Fi, depois o hotspot do carro, depois o Wi-Fi Direct.</string>
+    <string name="carlink_settings_method_same_wifi_detail">Celular e carro no mesmo roteador, o caminho mais rápido. Precisa da senha do Wi-Fi uma vez.</string>
+    <string name="carlink_settings_method_hotspot_detail">O celular entra no hotspot Wi-Fi que o carro cria. Funciona com qualquer celular.</string>
+    <string name="carlink_settings_method_direct_detail">Uma conexão direta entre o celular e o carro. Não precisa de rede.</string>
+    <string name="carlink_settings_method_sheet_body">O Bluetooth sempre inicia a conexão; depois a imagem e o som vão pelo Wi-Fi.</string>
+
+    <string name="carlink_settings_hotspot">Hotspot do carro</string>
+    <string name="carlink_settings_hotspot_detail">Nome e senha do hotspot do próprio carro</string>
+    <string name="carlink_settings_hotspot_sheet_body">O CarLink lê esses dados do carro quando pode e os passa para o seu celular. Mude-os aqui e o CarLink muda também o hotspot do carro, quando o Android permite.</string>
+    <string name="carlink_settings_hotspot_read">Ler do carro</string>
+    <string name="carlink_settings_hotspot_reading">Lendo o hotspot do carro…</string>
+    <string name="carlink_settings_hotspot_unreadable">Esta multimídia não deixa o CarLink ler o hotspot dela. Digite o nome e a senha exatamente como aparecem nas configurações de hotspot do carro.</string>
+    <string name="carlink_settings_hotspot_applied">O hotspot do carro agora usa este nome e esta senha</string>
+    <string name="carlink_settings_hotspot_not_applied">Salvo no CarLink. Esta multimídia não deixa o CarLink mudar o hotspot dela: defina o mesmo nome e a mesma senha nas configurações de hotspot do carro.</string>
+    <string name="carlink_settings_same_wifi">Mesma rede Wi-Fi</string>
+    <string name="carlink_settings_same_wifi_detail">O roteador em que o carro e o iPhone entram</string>
+    <string name="carlink_settings_same_wifi_sheet_body">O carro já precisa estar neste Wi-Fi. O CarLink pede pelo Bluetooth para o iPhone entrar nele.</string>
+    <string name="carlink_settings_wifi_name">Nome da rede</string>
+    <string name="carlink_settings_wifi_password">Senha</string>
+    <string name="carlink_settings_wifi_name_error">Digite um nome de até 32 caracteres</string>
+    <string name="carlink_settings_wifi_password_error">Use de 8 a 63 caracteres, ou deixe vazio para uma rede aberta</string>
+    <string name="carlink_settings_wifi_show">Mostrar</string>
+    <string name="carlink_settings_wifi_hide">Ocultar</string>
+    <string name="carlink_settings_wifi_save">Salvar</string>
+    <string name="carlink_settings_wifi_forget">Esquecer</string>
+    <string name="carlink_settings_wifi_use_current">Usar “%1$s”</string>
+
+    <string name="carlink_settings_group_phones">Celulares e permissões</string>
+    <string name="carlink_settings_bluetooth">Parear um celular</string>
+    <string name="carlink_settings_bluetooth_detail">Abre as configurações de Bluetooth do Android</string>
+    <string name="carlink_settings_permissions">Permissões do app</string>
+    <string name="carlink_settings_permissions_detail">Veja o que o CarLink tem permissão para usar</string>
+
+    <!-- Display -->
+    <string name="carlink_settings_group_projection">CarPlay e Android Auto</string>
+    <string name="carlink_settings_picture">Imagem</string>
+    <string name="carlink_settings_picture_detail">Nitidez e fluidez da imagem</string>
+    <string name="carlink_settings_picture_auto">Automática</string>
+    <string name="carlink_settings_picture_best">Máxima</string>
+    <string name="carlink_settings_picture_balanced">Equilibrada</string>
+    <string name="carlink_settings_picture_light">Leve</string>
+    <string name="carlink_settings_picture_auto_detail">Recomendada para esta multimídia</string>
+    <string name="carlink_settings_picture_best_detail">A mais nítida, a 60 quadros por segundo. Precisa de uma multimídia rápida.</string>
+    <string name="carlink_settings_picture_balanced_detail">Nítida a 30 quadros por segundo. Melhor para multimídias mais antigas.</string>
+    <string name="carlink_settings_picture_light_detail">Resolução menor, para Wi-Fi lento ou hardware antigo.</string>
+    <string name="carlink_settings_interface_size">Tamanho da interface</string>
+    <string name="carlink_settings_interface_size_detail">Tamanho dos ícones e textos no CarPlay e no Android Auto</string>
+    <string name="carlink_settings_size_small">Pequeno</string>
+    <string name="carlink_settings_size_medium">Médio</string>
+    <string name="carlink_settings_size_large">Grande</string>
+    <string name="carlink_settings_size_default">Padrão</string>
+    <string name="carlink_settings_size_extra_large">Extra grande</string>
+    <string name="carlink_settings_size_small_detail">Cabe mais coisa na tela</string>
+    <string name="carlink_settings_size_medium_detail">Recomendado</string>
+    <string name="carlink_settings_size_large_detail">Mais fácil de ler e tocar</string>
+    <string name="carlink_settings_daynight">Dia e noite</string>
+    <string name="carlink_settings_daynight_detail">Quando os mapas e as telas escurecem</string>
+    <string name="carlink_settings_daynight_auto">Automático</string>
+    <string name="carlink_settings_daynight_day">Dia</string>
+    <string name="carlink_settings_daynight_night">Noite</string>
+    <string name="carlink_settings_daynight_schedule">Programado</string>
+    <string name="carlink_settings_daynight_auto_detail">Segue o carro e o pôr do sol</string>
+    <string name="carlink_settings_daynight_day_detail">Sempre claro</string>
+    <string name="carlink_settings_daynight_night_detail">Sempre escuro</string>
+    <string name="carlink_settings_daynight_schedule_detail">Escuro entre dois horários que você escolhe</string>
+    <string name="carlink_settings_night_start">A noite começa</string>
+    <string name="carlink_settings_night_end">A noite termina</string>
+    <string name="carlink_settings_time_earlier">15 min mais cedo</string>
+    <string name="carlink_settings_time_later">15 min mais tarde</string>
+
+    <!-- Sound -->
+    <string name="carlink_settings_group_sound">Som</string>
+    <string name="carlink_settings_sound">O som toca</string>
+    <string name="carlink_settings_sound_detail">Onde tocam a música, as instruções de rota e as ligações</string>
+    <string name="carlink_settings_sound_carlink">Pelo CarLink</string>
+    <string name="carlink_settings_sound_bluetooth">Pelo Bluetooth do carro</string>
+    <string name="carlink_settings_sound_carlink_detail">A multimídia toca todo o som. Recomendado.</string>
+    <string name="carlink_settings_sound_bluetooth_detail">A música vai pelo áudio Bluetooth do próprio carro.</string>
+
+    <!-- Navigation -->
+    <string name="carlink_settings_group_location">Localização</string>
+    <string name="carlink_settings_location">Enviar a localização do carro</string>
+    <string name="carlink_settings_location_detail">Compartilha o GPS do carro com o celular para rotas mais estáveis</string>
+    <string name="carlink_settings_byd">Rotas no HUD e no painel</string>
+    <string name="carlink_settings_byd_detail">Mostra a próxima curva no painel de instrumentos e no head-up display do BYD</string>
+
+    <!-- Car -->
+    <string name="carlink_settings_group_car">Seu carro</string>
+    <string name="carlink_settings_driving_side">Lado do volante</string>
+    <string name="carlink_settings_driving_side_detail">Mantém os controles do CarPlay e do Android Auto perto do motorista</string>
+    <string name="carlink_settings_drive_left">Volante à esquerda</string>
+    <string name="carlink_settings_drive_right">Volante à direita</string>
+    <string name="carlink_settings_drive_left_detail">Volante do lado esquerdo</string>
+    <string name="carlink_settings_drive_right_detail">Volante do lado direito</string>
+
+    <!-- General -->
+    <string name="carlink_settings_group_carlink">CarLink</string>
+    <string name="carlink_settings_appearance">Aparência</string>
+    <string name="carlink_settings_appearance_detail">Cores das telas do próprio CarLink</string>
+    <string name="carlink_settings_appearance_follow">Seguir o carro</string>
+    <string name="carlink_settings_appearance_dark">Escuro</string>
+    <string name="carlink_settings_appearance_light">Claro</string>
+    <string name="carlink_settings_appearance_follow_detail">Escuro à noite, claro de dia</string>
+    <string name="carlink_settings_appearance_dark_detail">Grafite, mais confortável à noite</string>
+    <string name="carlink_settings_appearance_light_detail">Grafite claro e quente</string>
+    <string name="carlink_settings_layout">Layout</string>
+    <string name="carlink_settings_layout_detail">Controles do tamanho de carro ou de celular</string>
+    <string name="carlink_settings_layout_auto">Automático</string>
+    <string name="carlink_settings_layout_car">Carro</string>
+    <string name="carlink_settings_layout_handheld">Celular ou tablet</string>
+    <string name="carlink_settings_layout_auto_detail">Escolhe o tamanho certo para este aparelho</string>
+    <string name="carlink_settings_layout_car_detail">Botões grandes para uma multimídia</string>
+    <string name="carlink_settings_layout_handheld_detail">Tamanhos padrão do Android</string>
+    <string name="carlink_settings_rendering">Efeitos visuais</string>
+    <string name="carlink_settings_rendering_detail">Luz, brilho e animação nas telas do CarLink</string>
+    <string name="carlink_settings_rendering_auto">Automático</string>
+    <string name="carlink_settings_rendering_full">Completo</string>
+    <string name="carlink_settings_rendering_lite">Leve</string>
+    <string name="carlink_settings_rendering_auto_value">Automático · %1$s</string>
+    <string name="carlink_settings_rendering_auto_detail_lite">Leve neste aparelho, que tem pouca memória ou processador fraco</string>
+    <string name="carlink_settings_rendering_auto_detail_full">Completo neste aparelho</string>
+    <string name="carlink_settings_rendering_full_detail">Luz suave, brilho, granulado e animação fluida</string>
+    <string name="carlink_settings_rendering_lite_detail">Preenchimentos simples e menos redesenhos, para multimídias mais lentas. Mesmo layout e mesmas cores</string>
+    <string name="carlink_settings_carlink_size">Tamanho do texto do CarLink</string>
+    <string name="carlink_settings_carlink_size_detail">Tamanho das telas do próprio CarLink</string>
+    <string name="carlink_settings_group_help">Ajuda</string>
+    <string name="carlink_settings_diagnostics">Diagnóstico</string>
+    <string name="carlink_settings_diagnostics_detail">Verificações e detalhes da conexão ao vivo</string>
+    <string name="carlink_settings_group_about">Sobre</string>
+    <string name="carlink_settings_version">Versão</string>
+    <plurals name="carlink_settings_lab_taps">
+        <item quantity="one">Toque mais uma vez para mostrar o Lab</item>
+        <item quantity="many">Toque mais %1$d vezes para mostrar o Lab</item>
+        <item quantity="other">Toque mais %1$d vezes para mostrar o Lab</item>
+    </plurals>
+    <string name="carlink_settings_lab_toggle">Mostrar as configurações do Lab</string>
+    <string name="carlink_settings_lab_toggle_detail">Opções experimentais e de depuração, com moldura âmbar</string>
+    <string name="carlink_settings_about_open">Sobre o CarLink</string>
+
+    <!-- Advanced and Lab -->
+    <string name="carlink_settings_advanced">Avançado</string>
+    <string name="carlink_settings_advanced_detail">Configurações dos motores para usuários experientes. Mudar aqui um valor de imagem ou tamanho deixa a configuração correspondente acima como Personalizado.</string>
+    <string name="carlink_settings_lab">Lab</string>
+    <string name="carlink_settings_lab_detail">Opções experimentais e de depuração. Se uma conexão parar de funcionar, desligue-as primeiro.</string>
+    <string name="carlink_settings_floating_switcher">Seletor flutuante</string>
+    <string name="carlink_settings_floating_switcher_detail">Um botão pequeno sobre o CarPlay e o Android Auto para trocar de celular, abrir o CarLink ou desconectar</string>
+    <string name="carlink_settings_floating_switcher_permission">Permitir sobrepor a outros apps</string>
+    <string name="carlink_settings_floating_switcher_permission_detail">O Android exige isso para o CarLink mostrar o botão</string>
+    <!-- Settings › Car › Car brand (core settings/CarBrand), also the setup's car step. Brand names come from CarBrand.displayName. -->
+    <string name="carlink_settings_car_brand">Marca do carro</string>
+    <string name="carlink_settings_car_brand_detail">BYD acrescenta os extras do DiLink; as outras marcas só identificam o carro</string>
+    <string name="carlink_settings_car_brand_sheet_body">Escolha a marca deste carro. O CarPlay e o Android Auto funcionam igual em qualquer carro.</string>
+    <!-- What the detection found: a generic screen, or a BYD DiLink unit. -->
+    <string name="carlink_settings_car_generic">Genérico</string>
+    <string name="carlink_settings_car_byd">BYD (DiLink)</string>
+    <string name="carlink_settings_car_detected">Detectado: %1$s</string>
+    <!-- The car brand when the driver never chose one and the screen is not a BYD. -->
+    <string name="carlink_settings_car_not_chosen">Outra / Genérico</string>
+    <string name="carlink_settings_car_other">Outra / não está na lista</string>
+    <string name="carlink_settings_car_popular">Populares na Índia</string>
+    <string name="carlink_settings_car_luxury">Luxo</string>
+    <string name="carlink_settings_car_motorcycles">Motos</string>
+    <string name="carlink_settings_car_byd_extras">Extras do DiLink</string>
+    <string name="carlink_settings_car_explain_byd">O BYD acrescenta os extras do DiLink: rotas no HUD e no painel de instrumentos, e os botões do volante do BYD.</string>
+    <string name="carlink_settings_car_explain_other">O CarPlay e o Android Auto funcionam igual a qualquer carro. A marca só identifica este carro no CarLink.</string>
+    <!-- Settings › Car › Steering-wheel buttons (core settings/WheelKeys). -->
+    <string name="carlink_wheel_keys">Botões do volante</string>
+    <string name="carlink_wheel_keys_detail">Ensine ao CarLink os botões do seu volante para voz, ligações e música no CarPlay e no Android Auto</string>
+    <plurals name="carlink_wheel_keys_value">
+        <item quantity="one">%d definido</item>
+        <item quantity="many">%d definidos</item>
+        <item quantity="other">%d definidos</item>
+    </plurals>
+    <string name="carlink_wheel_keys_sheet_body">Toque em Aprender e aperte o botão no volante. Botões que a multimídia guarda para si nunca chegam ao CarLink e não podem ser aprendidos.</string>
+    <string name="carlink_wheel_action_voice">Assistente de voz</string>
+    <string name="carlink_wheel_action_voice_detail">Siri ou Google Assistente</string>
+    <string name="carlink_wheel_action_answer">Atender ligação</string>
+    <string name="carlink_wheel_action_hang_up">Desligar</string>
+    <string name="carlink_wheel_action_play_pause">Tocar / Pausar</string>
+    <string name="carlink_wheel_action_next">Próxima</string>
+    <string name="carlink_wheel_action_previous">Anterior</string>
+    <!-- The learned key: its Android name and code, e.g. "MEDIA_NEXT · 87". -->
+    <string name="carlink_wheel_key_value">%1$s · %2$d</string>
+    <string name="carlink_wheel_key_unnamed">Tecla %1$d</string>
+    <string name="carlink_wheel_key_learn">Aprender</string>
+    <string name="carlink_wheel_key_reset">Redefinir tudo</string>
+    <string name="carlink_wheel_key_waiting">Aperte um botão no volante…</string>
+    <string name="carlink_wheel_key_waiting_for">Para: %1$s</string>
+    <plurals name="carlink_wheel_key_seconds">
+        <item quantity="one">Aguardando %d segundo</item>
+        <item quantity="many">Aguardando %d segundos</item>
+        <item quantity="other">Aguardando %d segundos</item>
+    </plurals>
+    <string name="carlink_wheel_key_waiting_note">Os botões de volume, Voltar e Início não podem ser usados.</string>
+    <string name="carlink_wheel_key_timed_out">Nenhum botão chegou. A multimídia pode guardar esse para si.</string>
+    <string name="carlink_wheel_key_cancel">Cancelar</string>
+    <string name="carlink_settings_setup_again">Configurar de novo</string>
+    <string name="carlink_settings_setup_again_detail">Permissões, marca do carro e pareamento do celular, passo a passo</string>
+</resources>

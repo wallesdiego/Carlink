@@ -1,0 +1,567 @@
+package com.carlink.app.ui
+
+import android.app.Application
+import android.content.Intent
+import android.os.SystemClock
+import android.provider.Settings
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.andrerinas.openheadunit.aap.AapProjectionActivity
+import com.carlink.core.core.Engine
+import com.carlink.core.core.LinkStage
+import com.carlink.core.core.LinkState
+import com.carlink.core.core.PhoneKind
+import com.carlink.core.core.Transport
+import com.carlink.core.detect.BluetoothAvailability
+import com.carlink.core.detect.PairedPhone
+import com.carlink.core.detect.PhonesRepository
+import com.carlink.core.connection.Connection
+import com.carlink.core.connection.DevicePreflight
+import com.carlink.core.connection.SessionState
+import com.carlink.core.connection.WirelessPolicy
+import com.carlink.core.connection.toLinkState
+import com.shilapi.xcertplay.AirPlayPersistence
+import kotlinx.coroutines.flow.map
+import com.carlink.core.settings.CarLinkPreferences
+import com.carlink.core.settings.ConnectionMethod
+import com.carlink.core.settings.WifiEnvironmentReader
+import com.carlink.core.settings.UnifiedSettings
+import com.carlink.core.settings.UnifiedSettingsStore
+import com.carlink.core.settings.WirelessPath
+import com.carlink.core.settings.isValid
+import com.carlink.core.settings.matchedTo
+import com.carlink.app.ui.theme.ThemeMode
+import com.carlink.app.ui.theme.UiProfileMode
+import com.shilapi.xcertplay.CarPlayHostActivity
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import com.carlink.app.ui.theme.RenderingMode
+import com.carlink.app.ui.theme.RenderingPolicy
+
+/** CarLink's own preferences as the UI renders them. */
+data class DisplayPrefs(
+    val themeMode: ThemeMode,
+    val uiProfileMode: UiProfileMode,
+    val interfaceScale: Float,
+    val renderingMode: RenderingMode = RenderingMode.AUTO,
+    /** What [RenderingMode.AUTO] resolves to on this device. */
+    val autoLite: Boolean = false,
+) {
+    val liteRendering: Boolean get() = when (renderingMode) {
+        RenderingMode.AUTO -> autoLite
+        RenderingMode.FULL -> false
+        RenderingMode.LITE -> true
+    }
+}
+
+data class ConnectionPrefs(
+    val autoConnectUsb: Boolean,
+    val autoConnectBluetooth: Boolean,
+    val startOnBoot: Boolean,
+    val autoConnectPaused: Boolean,
+    /** The floating switcher over the projection (Settings › General). */
+    val floatingSwitcher: Boolean = true,
+    /** "Wireless through the stereo's Bluetooth module (experimental)" (Settings › Connection, advanced). */
+    val wirelessOnExternalBluetooth: Boolean = false,
+    /** Settings › Connection › Root mode (advanced). */
+    val rootMode: Boolean = false,
+)
+
+/** The wireless path the next session would use, for Home's Network chip. */
+data class NetworkPreview(
+    val path: WirelessPath,
+    val ssid: String?,
+    /** The car's current Wi-Fi when exactly one is joined and its name is readable. */
+    val joinedSsid: String? = null,
+    /** The saved Same Wi-Fi and car hotspot names ("" when none): Home's password prompt shows them. */
+    val savedSameWifi: String = "",
+    val savedHotspot: String = "",
+    /** The driver's choice; [path] is what it resolves to right now. */
+    val method: ConnectionMethod = ConnectionMethod.AUTOMATIC,
+)
+
+/**
+ * The car-brand setting: the driver's [brand] (null until they choose) and what this screen was
+ * [detected] as (BYD on a BYD DiLink unit, else null). [profile] is what the engines see.
+ */
+data class VehicleChoice(
+    val brand: com.carlink.core.settings.CarBrand?,
+    val detected: com.carlink.core.settings.CarBrand?,
+) {
+    val profile: com.carlink.core.settings.VehicleProfile
+        get() = (brand ?: detected)?.profile ?: com.carlink.core.settings.VehicleProfile.GENERIC
+}
+
+/** What Home's hero shows (DESIGN_SPEC §6.1.1 hero states). */
+data class HomeState(
+    val link: LinkState,
+    val phones: List<PairedPhone>,
+    val bluetooth: BluetoothAvailability,
+    /** The phone the primary button connects: the connected one, else the first known one. */
+    val defaultPhone: PairedPhone?,
+    /** elapsedRealtime when the current session reached CONNECTED, or null. */
+    val connectedSince: Long?,
+    /** UI only: the kinds of phone plugged in by USB right now, for "Plugged in (USB)" labels. */
+    val usbKinds: Set<PhoneKind> = emptySet(),
+)
+
+/**
+ * The single source of truth for every CarLink screen. Screens read the StateFlows and call
+ * the intent methods; none of them talks to an engine directly.
+ */
+class CarLinkViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application
+    private val session = Connection.get(app)
+    private val preferences = CarLinkPreferences(app)
+    private val uiPreferences = UiPreferences(app)
+    private val phonesRepository = PhonesRepository(app)
+
+    /** A second USB phone waiting for the driver's "Switch to …?" answer. */
+    val pendingSwitch = session.pendingSwitch
+    fun acceptSwitch() = session.acceptSwitch()
+    fun declineSwitch() = session.declineSwitch()
+
+    val link: StateFlow<LinkState> = session.state.map { it.toLinkState(AirPlayPersistence.loadDirectVideoOutput(app)) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, session.state.value.toLinkState(AirPlayPersistence.loadDirectVideoOutput(app)))
+
+    private val _lastSession = MutableStateFlow(session.state.value.takeIf { it != SessionState.Idle }
+        ?.let { com.carlink.app.diagnostics.LastSession(it, System.currentTimeMillis()) })
+    /** The current or last session of this process (Idle never replaces it): the issue report describes it. */
+    val lastSession: StateFlow<com.carlink.app.diagnostics.LastSession?> = _lastSession.asStateFlow()
+
+    /** The car brand's name for the issue report ("Other / Generic" until one is chosen). */
+    fun carBrandName(): String? = vehicle.value.let { it.brand ?: it.detected }?.displayName
+
+    /** Saved Wi-Fi and hotspot passwords, which the issue report removes wherever they appear. */
+    fun savedSecrets(): List<String> = _unified.value.let { listOf(it.carHotspot.password, it.homeWifi.password) } +
+        listOfNotNull(runCatching { WifiEnvironmentReader.read(app, _unified.value).systemHotspot?.password }.getOrNull())
+
+    private val _connectedSince = MutableStateFlow<Long?>(null)
+    /** When the current attempt started (for the Connecting timer), or null. */
+    private val _attemptStartedAt = MutableStateFlow<Long?>(null)
+    val attemptStartedAt: StateFlow<Long?> = _attemptStartedAt.asStateFlow()
+
+    /** UI only: which kinds of phone are plugged in by USB, refreshed on attach and detach. */
+    private val _usbKinds = MutableStateFlow(com.carlink.app.ui.premium.usbPhoneKinds(app))
+    private val usbReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            _usbKinds.value = com.carlink.app.ui.premium.usbPhoneKinds(app)
+        }
+    }
+
+    val home: StateFlow<HomeState> = combine(
+        link, phonesRepository.phones, phonesRepository.availability, _connectedSince, _usbKinds,
+    ) { link, phones, bluetooth, since, usb ->
+        HomeState(link, phones, bluetooth, defaultPhone(phones), since, usb)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly,
+        HomeState(LinkState.Idle, emptyList(), BluetoothAvailability.READY, null, null))
+
+    /** Each known phone's connection health (Diagnostics › Phones). */
+    val health: StateFlow<List<com.carlink.core.connection.PhoneHealth>> = session.health
+
+    /** How Home's default phone usually connects, from its record; null before it has one. */
+    val usual: StateFlow<com.carlink.app.ui.home.PhoneUsual?> = combine(session.health, home) { health, home ->
+        com.carlink.app.ui.home.usualFor(home.defaultPhone, health)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _vehicle = MutableStateFlow(readVehicle())
+    /** Settings › Car › Car brand, and the setup's car step. */
+    val vehicle: StateFlow<VehicleChoice> = _vehicle.asStateFlow()
+
+    /** Stores the car brand; a change to or from BYD applies from the next connection (the CarPlay hooks are re-installed at once). */
+    fun setCarBrand(brand: com.carlink.core.settings.CarBrand) {
+        Connection.setCarBrand(app, brand)
+        _vehicle.value = readVehicle()
+    }
+
+    private fun readVehicle() = VehicleChoice(Connection.carBrand(app), com.carlink.core.settings.CarBrand.detect(app))
+
+    /**
+     * First-time setup runs at launch until it is finished or skipped once. A device that already
+     * knows a phone (an update from before the setup existed) counts as set up.
+     */
+    fun setupNeeded(): Boolean {
+        if (uiPreferences.setupDone) return false
+        val knowsPhone = com.carlink.core.connection.DeviceEnvironment.lastPhoneAddress(app) != null ||
+            home.value.phones.any { it.kind != PhoneKind.UNKNOWN } || session.health.value.isNotEmpty()
+        if (knowsPhone) uiPreferences.setupDone = true
+        return !knowsPhone
+    }
+
+    /** The setup was finished or skipped; it is not shown at launch again (Settings can re-run it). */
+    fun finishSetup() { uiPreferences.setupDone = true }
+
+    private val _display = MutableStateFlow(readDisplay())
+    val display: StateFlow<DisplayPrefs> = _display.asStateFlow()
+
+    private val _connection = MutableStateFlow(readConnection())
+    val connection: StateFlow<ConnectionPrefs> = _connection.asStateFlow()
+
+    private val unifiedStore = UnifiedSettingsStore(app)
+    private val _unified = MutableStateFlow(unifiedStore.load())
+    /** The one set of settings both engines use. */
+    val unified: StateFlow<UnifiedSettings> = _unified.asStateFlow()
+
+    private val _stereoBluetooth = MutableStateFlow(com.carlink.core.detect.ExternalBluetoothProbe.cached())
+    /** What this stereo's Bluetooth is (Diagnostics, Settings, the setup); null until the probe finished. */
+    val stereoBluetooth: StateFlow<com.carlink.core.detect.StereoBluetoothReport?> = _stereoBluetooth.asStateFlow()
+
+    /** Wireless cannot start on this stereo (external Bluetooth module, and the driver did not override it). */
+    val wirelessUnavailable: StateFlow<Boolean> = combine(_stereoBluetooth, _connection) { report, prefs ->
+        // Setup's pairing step: the module setting only ever unblocks Android Auto.
+        report != null && com.carlink.core.connection.DeviceEnvironment.wirelessBlocked(report.classification,
+            prefs.wirelessOnExternalBluetooth, com.carlink.core.core.Engine.ANDROID_AUTO)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _network = MutableStateFlow<NetworkPreview?>(null)
+    val network: StateFlow<NetworkPreview?> = _network.asStateFlow()
+
+    private val _permissionsNeeded = MutableStateFlow(missingPermissions().isNotEmpty())
+    /** True until the runtime permissions CarLink needs to find phones are granted. */
+    val permissionsNeeded: StateFlow<Boolean> = _permissionsNeeded.asStateFlow()
+
+    init {
+        // Root mode re-applies its grants once per run (an update or a reinstall resets some of them).
+        if (preferences.rootMode) viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.carlink.core.settings.RootMode.grant(app, com.carlink.app.ui.setup.SetupPermissions.runtimePermissions())
+        }
+        if (_stereoBluetooth.value == null) viewModelScope.launch {
+            _stereoBluetooth.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.carlink.core.detect.ExternalBluetoothProbe.await(app)
+            }
+        }
+        phonesRepository.start()
+        runCatching {
+            androidx.core.content.ContextCompat.registerReceiver(app, usbReceiver, android.content.IntentFilter().apply {
+                addAction(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                addAction(android.hardware.usb.UsbManager.ACTION_USB_DEVICE_DETACHED)
+            }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        }
+        viewModelScope.launch {
+            session.state.collect { state ->
+                if (state != SessionState.Idle) _lastSession.value = com.carlink.app.diagnostics.LastSession(state, System.currentTimeMillis())
+            }
+        }
+        viewModelScope.launch {
+            link.collect { state ->
+                when (state.stage) {
+                    LinkStage.CONNECTED -> if (_connectedSince.value == null) _connectedSince.value = SystemClock.elapsedRealtime()
+                    LinkStage.WAITING, LinkStage.CONNECTING ->
+                        if (_attemptStartedAt.value == null) _attemptStartedAt.value = SystemClock.elapsedRealtime()
+                    LinkStage.IDLE, LinkStage.FAILED -> {
+                        _connectedSince.value = null
+                        if (state.stage == LinkStage.IDLE) _attemptStartedAt.value = null
+                    }
+                }
+                if (state.stage == LinkStage.CONNECTED) _attemptStartedAt.value = null
+            }
+        }
+    }
+
+    override fun onCleared() {
+        phonesRepository.stop()
+        runCatching { app.unregisterReceiver(usbReceiver) }
+    }
+
+    // ---- Connection intents -------------------------------------------------------------
+
+    /** Connect this phone wirelessly (Home's phone list / primary button). */
+    fun connect(phone: PairedPhone) {
+        _connection.value = _connection.value.copy(autoConnectPaused = false)
+        _attemptStartedAt.value = SystemClock.elapsedRealtime()
+        session.connect(phone.address, phone.kind, phone.name, Transport.WIRELESS)
+    }
+
+    /**
+     * The driver chose another phone while one is projecting: end that session and start this
+     * one. Unlike [disconnect], this does not pause automatic connection.
+     */
+    fun switchTo(phone: PairedPhone) = connect(phone)
+
+    /** Wired start for a phone that is already plugged in but was not started automatically. */
+    fun connectUsb(kind: PhoneKind) {
+        _attemptStartedAt.value = SystemClock.elapsedRealtime()
+        session.connect(null, kind, null, Transport.USB)
+    }
+
+    /** Retry the last attempt with the same phone and transport. */
+    fun retry() {
+        val current = session.state.value
+        if (current is SessionState.Blocked || current is SessionState.Failed) {
+            _attemptStartedAt.value = SystemClock.elapsedRealtime()
+            return session.retry()
+        }
+        val state = link.value
+        val phone = home.value.phones.firstOrNull { it.name == state.phoneName } ?: home.value.defaultPhone
+        when {
+            state.transport == Transport.USB && state.engine != null ->
+                connectUsb(if (state.engine == Engine.CARPLAY) PhoneKind.IPHONE else PhoneKind.ANDROID)
+            phone != null -> connect(phone)
+        }
+    }
+
+    /** Cancel an attempt or end a session; pauses automatic starts (DESIGN_SPEC §6.2.1). */
+    fun disconnect() {
+        session.disconnect()
+        _connection.value = readConnection()
+    }
+
+    /** CarPlay sound but no picture (iOS 27, DiPlay #249): Direct video output on, then a fresh start. */
+    fun turnOnDirectVideo() {
+        AirPlayPersistence.saveDirectVideoOutput(app, true)
+        _attemptStartedAt.value = SystemClock.elapsedRealtime()
+        session.retry()
+    }
+
+    /**
+     * True from the car tile in CarPlay / Android Auto (HomeActivity page "settings") until the
+     * driver leaves that Settings visit: Back from it returns to the projection.
+     */
+    val settingsFromCar = MutableStateFlow(false)
+
+    /** Bring the running engine's projection back to the front. */
+    fun returnToProjection() {
+        val intent = when (link.value.engine) {
+            Engine.CARPLAY -> Intent(app, CarPlayHostActivity::class.java)
+            Engine.ANDROID_AUTO -> Intent(app, AapProjectionActivity::class.java)
+            null -> return
+        }
+        app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+    }
+
+    /** Re-reads phones, permissions and the network path (Home calls this on resume). */
+    fun refreshPhones() {
+        // The floating switcher may have changed the connection type or paused automatic starts
+        // while Home was in the background.
+        unifiedStore.load().let { if (it != _unified.value) _unified.value = it }
+        _connection.value = readConnection()
+        phonesRepository.refresh()
+        _permissionsNeeded.value = missingPermissions().isNotEmpty()
+        refreshNetwork()
+        val method = _unified.value.connectionMethod
+        if (method == ConnectionMethod.CAR_HOTSPOT ||
+            (method == ConnectionMethod.AUTOMATIC && com.carlink.app.ui.theme.UiProfileDetector.looksLikeCarDisplay(app))) importCarHotspot()
+    }
+
+    private fun refreshNetwork() {
+        val engine = home.value.defaultPhone?.kind?.engine ?: Engine.CARPLAY
+        val settings = _unified.value
+        val wifi = WifiEnvironmentReader.read(app, settings)
+        val systemHotspot = wifi.systemHotspot
+        val effective = if (!settings.carHotspot.isValid() && systemHotspot != null) {
+            settings.copy(carHotspot = systemHotspot)
+        } else settings
+        val path = WirelessPolicy.candidates(WirelessPolicy.Inputs(engine, effective, wifi,
+            headUnit = com.carlink.app.ui.theme.UiProfileDetector.looksLikeCarDisplay(app))).first()
+        _network.value = NetworkPreview(
+            path = path,
+            ssid = if (path == WirelessPath.SAME_WIFI) wifi.joinedSsid else null,
+            joinedSsid = wifi.joinedSsid,
+            savedSameWifi = settings.homeWifi.ssid,
+            savedHotspot = effective.carHotspot.ssid,
+            method = settings.connectionMethod,
+        )
+    }
+
+    /** Remembers the car's current Wi-Fi so wireless CarPlay can use it (Same Wi-Fi). */
+    fun saveSameWifi(ssid: String, password: String) =
+        updateSettings { it.copy(homeWifi = com.carlink.core.settings.WifiDetails(ssid, password)) }
+
+    private var carHotspotImported = false
+
+    /**
+     * Copies the stereo's own hotspot name and password into Settings once per process, without
+     * any prompt (app or approved local ADB). What the car broadcasts wins over a stale saved copy.
+     */
+    private fun importCarHotspot() {
+        if (carHotspotImported) return
+        carHotspotImported = true
+        viewModelScope.launch {
+            val system = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.carlink.core.settings.SystemWifi.readHotspot(app, allowRoot = false)
+            } ?: return@launch
+            updateSettings { it.copy(carHotspot = system) }
+        }
+    }
+
+    /** The car hotspot read now for the Settings sheet; may show the superuser prompt. */
+    suspend fun readCarHotspot(): com.carlink.core.settings.WifiDetails? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.carlink.core.settings.SystemWifi.readHotspot(app, allowRoot = true)
+        }
+
+    /** A saved Wi-Fi network's password (root only); may show the superuser prompt. */
+    suspend fun readSavedWifiPassword(ssid: String): String? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.carlink.core.settings.SystemWifi.readSavedPassword(ssid)
+        }
+
+    /** Saves the car hotspot and, when it differs from what the car broadcasts, applies it to the car. */
+    fun saveCarHotspot(details: com.carlink.core.settings.WifiDetails) {
+        updateSettings { it.copy(carHotspot = details) }
+        if (details.ssid.isEmpty()) return
+        viewModelScope.launch {
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val system = com.carlink.core.settings.SystemWifi.readHotspot(app, allowRoot = false)
+                if (system == details) null else com.carlink.core.settings.SystemWifi.writeHotspot(app, details)
+            } ?: return@launch
+            android.widget.Toast.makeText(app, if (result == com.carlink.core.settings.SystemWifi.Write.APPLIED)
+                com.carlink.app.R.string.carlink_settings_hotspot_applied else com.carlink.app.R.string.carlink_settings_hotspot_not_applied,
+                android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Remembers the car hotspot's name and password typed on Home (Car hotspot). */
+    fun saveCarHotspot(ssid: String, password: String) = saveCarHotspot(com.carlink.core.settings.WifiDetails(ssid, password))
+
+    /**
+     * Saves a change to the unified settings and writes it into both engines. A blocked start
+     * checks again, so a password or connection type the driver just gave takes effect at once.
+     */
+    fun updateSettings(change: (UnifiedSettings) -> UnifiedSettings) {
+        val changed = change(_unified.value)
+        val next = changed.copy(homeWifi = changed.homeWifi.matchedTo(_network.value?.joinedSsid))
+        if (next == _unified.value) return
+        _unified.value = next
+        unifiedStore.save(next)
+        // Engines read their settings at the start of each session (SessionManager writes them).
+        refreshNetwork()
+        session.onSettingsChanged()
+    }
+
+    /** Runtime permissions CarLink asks for in one go (Bluetooth, Wi-Fi, location, microphone, notifications). */
+    fun missingPermissions(): List<String> = DevicePreflight.requiredPermissions()
+        .filter { app.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+
+    /**
+     * The system screen that fixes [problem]: a radio panel, Location, the overlay grant. Radios and
+     * system switches can only be offered by Android's own screens; the screens launch it for a
+     * result and check again when the driver comes back (home/rememberProblemFix).
+     */
+    fun fixIntent(problem: com.carlink.core.core.LinkProblem): Intent? = when (problem) {
+        com.carlink.core.core.LinkProblem.BLUETOOTH_OFF -> Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        com.carlink.core.core.LinkProblem.WIFI_OFF, com.carlink.core.core.LinkProblem.SAME_WIFI_NOT_JOINED ->
+            Intent(if (android.os.Build.VERSION.SDK_INT >= 29) android.provider.Settings.Panel.ACTION_WIFI
+                else android.provider.Settings.ACTION_WIFI_SETTINGS)
+        com.carlink.core.core.LinkProblem.LOCATION_OFF -> Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        // Android's hotspot screen has no public action; this one opens it on AOSP and most skins.
+        com.carlink.core.core.LinkProblem.CAR_HOTSPOT_OFF -> Intent("android.settings.TETHER_SETTINGS")
+        com.carlink.core.core.LinkProblem.OVERLAY -> Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:${app.packageName}"))
+        else -> null
+    }
+
+    /**
+     * The one-tap fix for a problem Home shows, where it needs no activity result: a path switch,
+     * or [fixIntent]'s screen opened from the application. Permissions and the VPN consent are
+     * launched by the screens for a result (started from here, Android closes the VPN dialog).
+     */
+    fun fix(problem: com.carlink.core.core.LinkProblem) {
+        when (problem) {
+            com.carlink.core.core.LinkProblem.PHONE_REFUSED_WIFI, com.carlink.core.core.LinkProblem.PHONE_NEVER_REACHED_CAR -> {
+                updateSettings { it.copy(connectionMethod = com.carlink.core.settings.ConnectionMethod.WIFI_DIRECT) }
+                retry()
+            }
+            else -> fixIntent(problem)?.let { intent ->
+                runCatching { app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
+                    // No hotspot screen on this skin: the wireless settings hold it everywhere.
+                    if (problem == com.carlink.core.core.LinkProblem.CAR_HOTSPOT_OFF) runCatching {
+                        app.startActivity(Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }
+            }
+        }
+    }
+
+    /** Back from a fix (a system screen, a permission dialog): a failed or blocked start checks again. */
+    fun recheckAfterFix() {
+        if (link.value.stage == LinkStage.FAILED) retry()
+    }
+
+    fun setPhoneKind(phone: PairedPhone, kind: PhoneKind) = phonesRepository.setKind(phone.address, kind)
+
+    // ---- Preferences -------------------------------------------------------------------
+
+    fun setThemeMode(mode: ThemeMode) { uiPreferences.themeMode = mode; _display.value = readDisplay() }
+    fun setUiProfileMode(mode: UiProfileMode) { uiPreferences.uiProfileMode = mode; _display.value = readDisplay() }
+    fun setInterfaceScale(scale: Float) { uiPreferences.interfaceScale = scale; _display.value = readDisplay() }
+    fun setRenderingMode(mode: RenderingMode) { uiPreferences.renderingMode = mode; _display.value = readDisplay() }
+
+    fun setAutoConnectUsb(on: Boolean) { preferences.autoConnectUsb = on; _connection.value = readConnection() }
+    fun setAutoConnectBluetooth(on: Boolean) { preferences.autoConnectBluetooth = on; _connection.value = readConnection() }
+    fun setStartOnBoot(on: Boolean) { preferences.startOnBoot = on; _connection.value = readConnection() }
+    fun resumeAutoConnect() { preferences.autoConnectPaused = false; _connection.value = readConnection() }
+    fun setWirelessOnExternalBluetooth(on: Boolean) {
+        preferences.wirelessOnExternalBluetooth = on
+        _connection.value = readConnection()
+        com.carlink.core.diagnostics.EventLog.add("CarLink", "Wireless through the stereo's Bluetooth module (experimental): ${if (on) "on" else "off"}")
+    }
+    /** Root mode: turning it on asks the root manager once and grants everything setup asks for. */
+    fun setRootMode(on: Boolean) {
+        preferences.rootMode = on
+        _connection.value = readConnection()
+        if (!on) {
+            kotlin.concurrent.thread { com.carlink.core.settings.RootMode.projecting(false) }
+            return
+        }
+        viewModelScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.carlink.core.settings.RootMode.available() &&
+                    com.carlink.core.settings.RootMode.grant(app, com.carlink.app.ui.setup.SetupPermissions.runtimePermissions())
+            }
+            if (!ok) {
+                preferences.rootMode = false
+                _connection.value = readConnection()
+                android.widget.Toast.makeText(app, com.carlink.app.R.string.carlink_settings_root_unavailable, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun setFloatingSwitcher(on: Boolean) {
+        uiPreferences.floatingSwitcher = on
+        _connection.value = readConnection()
+        com.carlink.app.switcher.SwitcherController.onSettingChanged()
+    }
+
+    // ---- Other screens -----------------------------------------------------------------
+
+    // Engine settings are edited natively in CarLink's Settings (ui/settings); the engines' own
+    // settings screens are never opened.
+
+    fun openBluetoothSettings() = start(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+
+    fun openAppSettings() = start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", app.packageName, null)))
+
+    private fun start(intent: Intent) {
+        runCatching { app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /**
+     * The phone Home's main button offers: the one in the current session, else the one the
+     * driver used last, else one whose Bluetooth is connected, else the first known phone.
+     */
+    private fun defaultPhone(phones: List<PairedPhone>): PairedPhone? {
+        val known = phones.filter { it.kind != PhoneKind.UNKNOWN }
+        fun byAddress(address: String?) = address?.let { a -> known.firstOrNull { it.address.equals(a, ignoreCase = true) } }
+        val current = (session.state.value as? SessionState.Active)?.request?.phoneAddress
+        return byAddress(current)
+            ?: byAddress(com.carlink.core.connection.DeviceEnvironment.lastPhoneAddress(app))
+            ?: known.firstOrNull { it.connected }
+            ?: known.firstOrNull()
+    }
+
+    private fun readDisplay() = DisplayPrefs(uiPreferences.themeMode, uiPreferences.uiProfileMode, uiPreferences.interfaceScale,
+        uiPreferences.renderingMode, RenderingPolicy.autoIsLite(app))
+
+    // The short pause after a Disconnect is silent: Home shows its normal ready state, no "Resume".
+    private fun readConnection() = ConnectionPrefs(
+        preferences.autoConnectUsb, preferences.autoConnectBluetooth, preferences.startOnBoot, autoConnectPaused = false,
+        floatingSwitcher = uiPreferences.floatingSwitcher, wirelessOnExternalBluetooth = preferences.wirelessOnExternalBluetooth,
+        rootMode = preferences.rootMode)
+}

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ===== Update dialog (ui/update/UpdateDialog.kt) ===== -->
+    <string name="carlink_update_available_title">Atualização disponível</string>
+    <!-- The new version, e.g. "CarLink 1.1.0". -->
+    <string name="carlink_update_version">CarLink %1$s</string>
+    <!-- The installed version, e.g. "You have 1.0.0". -->
+    <string name="carlink_update_installed">Você tem a %1$s</string>
+    <string name="carlink_update_whats_new">Novidades</string>
+    <string name="carlink_update_no_notes">Sem notas de versão para esta versão.</string>
+    <string name="carlink_update_ignore">Ignorar esta versão</string>
+    <string name="carlink_update_later">Depois</string>
+    <string name="carlink_update_download">Baixar e instalar</string>
+
+    <!-- e.g. "Downloading CarLink 1.1.0". -->
+    <string name="carlink_update_downloading_title">Baixando o CarLink %1$s</string>
+    <!-- Downloaded so far and the total, e.g. "12.4 MB of 48.0 MB". -->
+    <string name="carlink_update_progress">%1$s de %2$s</string>
+    <string name="carlink_update_progress_unknown">%1$s baixados</string>
+    <string name="carlink_update_download_body">Você pode continuar usando o CarLink. Nada é instalado antes de o download ser verificado.</string>
+    <string name="carlink_update_cancel">Cancelar</string>
+
+    <string name="carlink_update_verifying_title">Verificando o download</string>
+    <string name="carlink_update_verifying_body">Conferindo se o arquivo está completo e assinado pelo CarLink.</string>
+
+    <string name="carlink_update_permission_title">Permita que o CarLink instale a atualização</string>
+    <string name="carlink_update_permission_body">O Android precisa da sua permissão uma vez. Na próxima tela, ative “Permitir desta fonte” e volte para o CarLink. A atualização continua sozinha.</string>
+    <string name="carlink_update_open_settings">Abrir configurações</string>
+
+    <!-- e.g. "Installing CarLink 1.1.0". -->
+    <string name="carlink_update_installing_title">Instalando o CarLink %1$s</string>
+    <string name="carlink_update_installing_body">Confirme na tela de instalação do Android. O CarLink fecha durante a atualização; abra de novo quando terminar.</string>
+
+    <string name="carlink_update_failed_title">Atualização não instalada</string>
+    <string name="carlink_update_error_download">O download não terminou. Verifique a conexão com a internet e tente de novo.</string>
+    <string name="carlink_update_error_checksum_missing">Esta versão não tem arquivo de checksum, então o download não pode ser verificado. Tente mais tarde.</string>
+    <string name="carlink_update_error_checksum">O arquivo baixado não confere com o checksum e pode estar corrompido. Ele foi apagado.</string>
+    <string name="carlink_update_error_unreadable">O arquivo baixado não é um app válido. Ele foi apagado.</string>
+    <string name="carlink_update_error_package">O arquivo baixado não é o CarLink. Ele foi apagado.</string>
+    <string name="carlink_update_error_not_newer">O arquivo baixado não é mais novo que a versão instalada. Ele foi apagado.</string>
+    <string name="carlink_update_error_signer">O arquivo baixado não está assinado com a chave oficial do CarLink, então não foi instalado. Ele foi apagado.</string>
+    <string name="carlink_update_error_install">O Android não instalou a atualização. Tente de novo.</string>
+    <!-- Android's own reason, e.g. "INSTALL_FAILED_INSUFFICIENT_STORAGE". -->
+    <string name="carlink_update_error_install_detail">O Android não instalou a atualização (%1$s). Tente de novo.</string>
+    <string name="carlink_update_error_install_cancelled">A instalação foi cancelada.</string>
+    <string name="carlink_update_try_again">Tentar de novo</string>
+    <string name="carlink_update_close">Fechar</string>
+
+    <!-- ===== About › Updates ===== -->
+    <string name="carlink_about_updates">Atualizações</string>
+    <string name="carlink_about_check_updates">Procurar atualizações</string>
+    <!-- e.g. "Version 1.0.0 · last checked 2 hours ago". -->
+    <string name="carlink_about_updates_last_checked">Versão %1$s · última verificação %2$s</string>
+    <string name="carlink_about_updates_never">Versão %1$s · ainda não verificada</string>
+    <string name="carlink_about_updates_checking">Verificando…</string>
+    <string name="carlink_about_updates_just_now">agora mesmo</string>
+    <string name="carlink_about_updates_up_to_date">Você está com a versão mais recente</string>
+    <!-- e.g. "CarLink 1.1.0 is available". -->
+    <string name="carlink_about_updates_available">CarLink %1$s disponível</string>
+    <string name="carlink_about_updates_failed">Não foi possível acessar o GitHub. Verifique a conexão com a internet e tente de novo.</string>
+    <string name="carlink_about_updates_rate_limited">O GitHub está ocupado agora. Tente daqui a pouco.</string>
+    <string name="carlink_about_updates_unsupported">Esta versão não se atualiza sozinha. Instale a versão oficial do GitHub para receber atualizações.</string>
+    <string name="carlink_about_auto_updates">Procurar atualizações automaticamente</string>
+    <string name="carlink_about_auto_updates_body">A cada 6 horas, com o CarLink aberto e nenhum celular conectado. Nada é baixado sem perguntar.</string>
+</resources>

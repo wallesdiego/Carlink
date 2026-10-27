@@ -1,0 +1,140 @@
+package com.carlink.core.connection.aa
+
+import com.carlink.core.core.Transport
+import com.carlink.core.settings.Picture
+import com.carlink.core.settings.UnifiedSettings
+import com.carlink.core.settings.VehicleProfile
+import com.carlink.core.settings.WifiDetails
+import com.carlink.core.settings.WifiEnvironment
+import com.carlink.core.settings.WirelessPath
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class AaSessionSettingsTest {
+    private val base = UnifiedSettings()
+    private val joined = WifiEnvironment(joinedNetworks = 1, joinedSsid = "Home", carHotspotOn = false,
+        joinedBssid = "AA:BB:CC:DD:EE:FF", joinedInterface = "wlan0")
+
+    private fun values(settings: UnifiedSettings = base, transport: Transport = Transport.WIRELESS,
+                       path: WirelessPath? = WirelessPath.WIFI_DIRECT, profile: VehicleProfile = VehicleProfile.GENERIC,
+                       wifi: WifiEnvironment? = null) =
+        AaSessionSettings.values(settings, transport, path, profile, "My Car", 320, wifi)
+
+    @Test fun everySessionWritesTheHostOwnedKeys() {
+        for (path in listOf(WirelessPath.WIFI_DIRECT, WirelessPath.CAR_HOTSPOT)) {
+            val v = values(path = path).values
+            assertEquals(3, v["wifi-connection-mode"])
+            for (key in listOf("auto-start-on-boot", "auto-start-on-screen-on", "auto-start-on-usb",
+                    "auto-start-on-wifi", "auto-start-self-mode", "auto-connect-last-session", "kill-on-disconnect")) {
+                assertEquals("$path $key", false, v[key])
+            }
+            assertEquals("0", v["static-bssid"])
+            assertEquals("My Car", v["vehicle-display-name"])
+            assertEquals(true, v["wifi-direct-stable-identity"])
+            assertEquals(setOf("usb", "wifi"), v["connection-modes"])
+            assertEquals(false, v["cluster-map-enabled"])
+        }
+        assertEquals(false, values(transport = Transport.USB, path = null).values["auto-connect-last-session"])
+    }
+
+    @Test fun theModuleRouteReachesTheEngineOnlyForWirelessSessions() {
+        val key = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.HOST_ROUTE_KEY
+        val blink = com.andrerinas.openheadunit.connection.ExternalBtTransportPolicy.Route.BLINK
+        assertEquals("", values().values[key])
+        assertEquals("BLINK", AaSessionSettings.values(base, Transport.WIRELESS, WirelessPath.WIFI_DIRECT, VehicleProfile.GENERIC,
+            "My Car", 320, moduleRoute = blink).values[key])
+        assertEquals("", AaSessionSettings.values(base, Transport.USB, null, VehicleProfile.GENERIC,
+            "My Car", 320, moduleRoute = blink).values[key])
+    }
+
+    @Test fun wifiDirectClearsEveryAccessPointValue() {
+        val v = values(settings = base.copy(carHotspot = WifiDetails("CarAP", "password1"))).values
+        assertEquals(0, v["native-ap-transport"])
+        assertEquals("", v["hotspot-interface"])
+        assertEquals("", v["hotspot-ssid"])
+        assertEquals("", v["hotspot-password"])
+    }
+
+    @Test fun carHotspotUsesSavedDetailsOrTheSystemsOwn() {
+        val saved = values(settings = base.copy(carHotspot = WifiDetails("CarAP", "password1")), path = WirelessPath.CAR_HOTSPOT).values
+        assertEquals(1, saved["native-ap-transport"])
+        assertEquals("CarAP", saved["hotspot-ssid"])
+        assertEquals("password1", saved["hotspot-password"])
+        assertEquals(false, saved["auto-enable-hotspot"])
+        val unsaved = values(path = WirelessPath.CAR_HOTSPOT).values
+        assertEquals("", unsaved["hotspot-ssid"])
+    }
+
+    @Test fun sameWifiNamesTheRouterAndItsExactBssid() {
+        val r = values(settings = base.copy(homeWifi = WifiDetails("Home", "secret123")), path = WirelessPath.SAME_WIFI, wifi = joined)
+        assertNull(r.problem)
+        assertEquals(1, r.values["native-ap-transport"])
+        assertEquals("wlan0", r.values["hotspot-interface"])
+        assertEquals("Home", r.values["hotspot-ssid"])
+        assertEquals("secret123", r.values["hotspot-password"])
+        assertEquals("AA:BB:CC:DD:EE:FF", r.values["static-bssid"])
+    }
+
+    @Test fun sameWifiWithoutItsDetailsIsAProblemNotAStaleRoute() {
+        val r = values(settings = base.copy(homeWifi = WifiDetails("Home", "secret123")), path = WirelessPath.SAME_WIFI,
+            wifi = joined.copy(joinedBssid = null))
+        assertNotNull(r.problem)
+        assertFalse(r.values.containsKey("static-bssid"))
+        assertFalse(r.values.containsKey("native-ap-transport"))
+    }
+
+    @Test fun usbWritesTheWifiDirectRouteForTheBackgroundEngine() {
+        val v = values(transport = Transport.USB, path = WirelessPath.SAME_WIFI, wifi = joined).values
+        assertEquals(0, v["native-ap-transport"])
+        assertEquals("0", v["static-bssid"])
+    }
+
+    @Test fun musicAndNavigationFollowTheProfile() {
+        val generic = values(settings = base.copy(bydDirections = true)).values
+        assertEquals(false, generic["music-via-bluetooth"])
+        assertEquals(false, generic["byd-navigation-enabled"])
+        assertEquals(true, values(settings = base.copy(soundThroughCarBluetooth = true)).values["music-via-bluetooth"])
+
+        val byd = values(settings = base.copy(bydDirections = true), profile = VehicleProfile.BYD_DILINK).values
+        assertEquals(true, byd["music-via-bluetooth"])
+        assertEquals(true, byd["byd-navigation-enabled"])
+        assertEquals(false, values(settings = base.copy(bydDirections = false), profile = VehicleProfile.BYD_DILINK).values["byd-navigation-enabled"])
+    }
+
+    @Test fun pictureAndSizeKeepV1sTranslations() {
+        val v = values(settings = base.copy(picture = Picture.BALANCED)).values
+        assertEquals(2, v["resolutionId"])
+        assertEquals(30, v["fps-limit"])
+        assertEquals(0, v["dpi-pixel-density"])
+        val custom = values(settings = base.copy(picture = Picture.CUSTOM)).values
+        assertFalse(custom.containsKey("resolutionId"))
+    }
+
+    /**
+     * Automatic DPI keeps Android Auto's 748x450 dp minimum (open-headunit #1108). The visible
+     * area is what DiAuto's HeadUnitScreenConfig gives each panel with Automatic resolution:
+     * codec size less margins (2560x1600: 1080p scaled to the panel height, 192 px width margin).
+     */
+    @Test fun automaticDensityKeepsAndroidAutosMinimumCanvas() {
+        data class Case(val panel: String, val w: Int, val h: Int, val deviceDpi: Int, val expected: Int)
+        for (c in listOf(
+            Case("1024x600", 1024, 600, 160, 160), Case("1024x600 high", 1024, 600, 240, 213),
+            Case("1280x720", 1280, 720, 213, 213), Case("1280x720 high", 1280, 720, 320, 256),
+            Case("1920x720 ultrawide", 1920, 720, 240, 240), Case("1920x720 ultrawide high", 1920, 720, 320, 256),
+            Case("800x480", 800, 480, 160, 160), Case("800x480 high", 800, 480, 240, 170),
+            Case("2560x1600", 1728, 1080, 320, 320), Case("2560x1600 high", 1728, 1080, 400, 369),
+        )) {
+            val dpi = AaSessionSettings.automaticDensityDpi(c.deviceDpi, c.w, c.h)
+            assertEquals(c.panel, c.expected, dpi)
+            assertTrue("${c.panel} height", c.h * 160 / dpi >= 450)
+            assertTrue("${c.panel} width", c.w * 160 / dpi >= 748)
+        }
+        // Portrait and an unknown picture keep the device's density.
+        assertEquals(320, AaSessionSettings.automaticDensityDpi(320, 720, 1280))
+        assertEquals(320, AaSessionSettings.automaticDensityDpi(320, 0, 0))
+    }
+}

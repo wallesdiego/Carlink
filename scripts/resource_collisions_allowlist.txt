@@ -1,0 +1,90 @@
+# Reviewed cross-engine resource collisions (scripts/resource_collisions.py).
+# app_name, launcher icons, locales_config and usb_device_filter: CarLink's :app overrides them.
+# The strings have the same meaning in both engines (about/settings_search_hint differ only in wording).
+# Add a line only after checking both definitions; never for layouts, styles or format strings.
+mipmap ic_launcher
+mipmap ic_launcher_foreground
+mipmap ic_launcher_round
+string about
+string app_name
+string auto
+string back
+string cancel
+string close
+string diagnostic_report_saved
+string reset
+string resolution
+string right_hand_drive
+string running
+string save
+string save_diagnostic_report
+string settings
+string settings_search_hint
+string share
+xml locales_config
+xml usb_device_filter
+
+# CarLink overrides of engine wording the driver sees during a session
+# (app/src/main/res/values/carlink_engine_overrides.xml; notification icons copied from ic_stat_carlink).
+# Each keeps the engine string's placeholders.
+drawable ic_diplay_notification
+drawable ic_stat_aa
+string allow_nearby_devices_for_diplay_in_the_head_unit_s_app_per
+string allow_precise_location_for_diplay_in_the_head_unit_s_app_p
+string back_to_diplay
+string boot_loop_paused_generic
+string boot_loop_paused_native_wifi_direct
+string cluster_waiting_for_map
+string could_not_start_carplay_return_to_diplay_and_check_app_per
+string diplay
+string existing_wifi_instructions
+string notification_service_running
+string open_diplay_settings_hint
+string setup_error_auth
+string wheel_key_service_description
+string wheel_key_service_label
+
+# CarLink's look for the engine UI around the projection (app/src/main/res/values/carlink_engine_theme.xml,
+# app/src/main/res/drawable/bg.xml, carlink_engine_overrides.xml). Reviewed 2026-10-09: the da_* colors only
+# feed DiAuto's dialog theme and its own (unused) screens; bg is DiAuto AppTheme's window background; the
+# strings are titles and labels of the CarPlay menu and the Android Auto exit menu, without placeholders.
+color da_accent
+color da_background
+color da_border
+color da_muted
+color da_surface
+color da_text
+drawable bg
+# DiAuto's exit-menu row (ids icon/text kept; Inter, 72dp rows). Layout, so re-check after a DiAuto pull.
+layout dialog_exit_item
+string carplay_settings
+string exit_dialog_background
+string exit_dialog_stop
+string exit_dialog_title
+string gesture_hint
+string side_panel_full_screen
+
+# DiAuto 0.3.12 copied DiPlay's turn card (e2cdb7937): the drawables are byte-identical and the
+# strings identical, placeholders included (the one exception to "never for format strings";
+# re-check them after either engine's update). cluster_map_size differs only in wording.
+drawable ic_turn_card_roundabout_left
+drawable ic_turn_card_roundabout_right
+drawable ic_turn_card_sports_score
+drawable ic_turn_card_straight
+drawable ic_turn_card_turn_left
+drawable ic_turn_card_turn_right
+drawable ic_turn_card_turn_sharp_left
+drawable ic_turn_card_turn_sharp_right
+drawable ic_turn_card_turn_slight_left
+drawable ic_turn_card_turn_slight_right
+drawable ic_turn_card_u_turn_left
+drawable ic_turn_card_u_turn_right
+string cluster_map_size
+string turn_card_distance_km
+string turn_card_distance_m
+string turn_card_exit
+string turn_card_info_arrival
+string turn_card_info_duration_hm
+string turn_card_info_duration_m
+string turn_card_info_km
+string turn_card_now
