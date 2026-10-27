@@ -8,16 +8,6 @@
 
 # CarLink
 
-**CarPlay and Android Auto in one app, for any Android car stereo or tablet.**
-
-[![Latest release](https://img.shields.io/github/v/release/F-e-n-y-x/CarLink?label=release)](https://github.com/F-e-n-y-x/CarLink/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/F-e-n-y-x/CarLink/total)](https://github.com/F-e-n-y-x/CarLink/releases)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-[![Android 7.1+](https://img.shields.io/badge/Android-7.1%2B%20(API%2025)-3DDC84?logo=android&logoColor=white)](#requirements)
-
-[**Download**](https://github.com/F-e-n-y-x/CarLink/releases/latest) ·
-[Install](#install) · [User guide](docs/USER_GUIDE.md) ·
-[Troubleshooting](docs/TROUBLESHOOTING.md) · [Docs](docs/README.md)
 
 </div>
 
