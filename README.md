@@ -21,6 +21,54 @@
 
 </div>
 
+> [!NOTE]
+> **Este é um fork do [CarLink](https://github.com/F-e-n-y-x/CarLink), criado por
+> [F-e-n-y-x](https://github.com/F-e-n-y-x).** Todo o app (telas, configurações, gerenciamento de
+> sessões e CarPlay) é trabalho do projeto original; este repositório só adapta o motor do
+> Android Auto. Os créditos completos estão em [Créditos](#credits).
+
+## O que muda neste fork
+
+**Android Auto com o Open Headunit 3.5.0.** O CarLink original usa o DiAuto 0.3.12, uma versão
+do Open Headunit 3.3.0-alpha adaptada para BYD. Em algumas centrais o Android Auto não
+conectava com ele, enquanto o
+[Open Headunit 3.5.0](https://github.com/andreknieriem/open-headunit) conectava por cabo USB,
+Wi-Fi Direct e hotspot da central. Este fork troca o motor do Android Auto (`vendor/diauto`) pelo
+Open Headunit 3.5.0 e mantém o resto do CarLink igual:
+
+- Os ganchos do CarLink foram religados no motor novo: a tela inicial e as notificações são as
+  do CarLink, as sessões só por USB não ligam o Wi-Fi, quem faz a troca USB é o CarLink, o botão
+  do carro no celular abre as Configurações do CarLink, a projeção usa o visual do CarLink e o
+  CarLink recebe os eventos de conexão.
+- Antes, o CarLink encerrava a sessão em situações que o próprio Open Headunit 3.5.0 resolve
+  sozinho (por exemplo, um grupo Wi-Fi Direct deixado por outro app). Agora ele deixa o motor
+  se recuperar.
+- As conexões iniciadas pelo CarLink contam como pedido do motorista, então os bloqueios
+  automáticos do motor (tela apagada, cancelamento, filtro de tipo de conexão) não as barram.
+- O Open Headunit 3.5.0 já traz o que o DiAuto tinha adaptado: link Bluetooth mãos-livres
+  completo, módulos Bluetooth externos (ZBT/BLINK), remoção de grupos Wi-Fi Direct antigos,
+  identidade Wi-Fi Direct fixa e o limite mínimo de DPI do Android Auto.
+- Ficaram de fora os recursos exclusivos de BYD do DiAuto: HUD no para-brisa e mapa no painel.
+
+Detalhes de cada alteração: [docs/VENDOR_CHANGES.md](docs/VENDOR_CHANGES.md).
+
+**Tradução para português do Brasil.** O app é distribuído em inglês e **português (pt-BR)** e
+segue o idioma da central:
+
+- As telas do CarLink (início, configurações, assistente de configuração, diagnóstico,
+  atualização e botão flutuante) estão traduzidas.
+- O Android Auto (Open Headunit) tem tradução própria para pt-BR.
+- No CarPlay, as mensagens que o CarLink mostra estão em pt-BR. O menu interno do motor do CarPlay
+  (DiPlay) ainda não tem tradução para português.
+
+**Estado:** o projeto compila e todos os testes de unidade passam (app, `carlink-core` e motores).
+A conexão com o motor novo ainda precisa ser confirmada em uma central de verdade.
+
+> [!IMPORTANT]
+> A atualização automática dentro do app consulta as versões do projeto original
+> (F-e-n-y-x/CarLink) e só instala APKs assinados com a chave dele. Compilações deste fork não
+> recebem essas atualizações; instale novas versões a partir daqui.
+
 Install CarLink on an Android car stereo, or on an Android tablet or phone used as the car's
 display. Plug in or connect your phone: an **iPhone gets CarPlay**, an **Android phone gets
 Android Auto**, by cable (USB) or wirelessly. CarLink works out which phone it is; there is
@@ -209,17 +257,19 @@ every release.
 
 ## Credits
 
-CarLink is built on two engines, both by [shihabal3amri](https://github.com/shihabal3amri), kept
-with their full history:
+This fork is based on **[CarLink](https://github.com/F-e-n-y-x/CarLink) by
+[F-e-n-y-x](https://github.com/F-e-n-y-x)**, which designed and built the app, its screens, its
+connection backend and its pt-BR translation. CarLink is built on two engines:
 
 - **[DiPlay](https://github.com/shihabal3amri/DiPlay)** (CarPlay), based on
   [xcertplay](https://github.com/shilapi/xcertplay) by shilapi: `vendor/diplay`.
-- **[DiAuto](https://github.com/shihabal3amri/DiAuto)** (Android Auto), a fork of
-  [Open Headunit](https://github.com/andreknieriem/open-headunit), based on Headunit Revived and
-  [Michael Reid's headunit](https://github.com/mikereidis/headunit): `vendor/diauto`.
+- **[Open Headunit](https://github.com/andreknieriem/open-headunit) 3.5.0** (Android Auto), by
+  andreknieriem and its contributors, based on Headunit Revived and
+  [Michael Reid's headunit](https://github.com/mikereidis/headunit): `vendor/diauto`. The original
+  CarLink used [DiAuto](https://github.com/shihabal3amri/DiAuto), shihabal3amri's BYD fork of it.
 
-Thank you to the authors of both engines and of the projects they build on. CarLink's About
-screen lists the other components and shows the full license texts.
+Thank you to F-e-n-y-x for CarLink, to the authors of both engines and of the projects they
+build on. CarLink's About screen lists the other components and shows the full license texts.
 
 ## License
 
